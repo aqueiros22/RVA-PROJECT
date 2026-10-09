@@ -1,0 +1,39 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 848409ee8ba454f42a5ddff137688a27, type: 3}
+  m_Name: CardsLibrary
+  m_EditorClassIdentifier: Unity.XR.ARSubsystems::UnityEngine.XR.ARSubsystems.XRReferenceImageLibrary
+  m_GuidLow: 5742287758736910626
+  m_GuidHigh: 14012181535072858546
+  m_DataStore:
+    m_Storage: []
+  m_Images:
+  - m_SerializedGuid:
+      m_GuidLow: 4818043521063200790
+      m_GuidHigh: 7749099908119024277
+    m_SerializedTextureGuid:
+      m_GuidLow: 4027587336416402856
+      m_GuidHigh: 14863431224454591562
+    m_Size: {x: 0, y: 0}
+    m_SpecifySize: 0
+    m_Name: sword
+    m_Texture: {fileID: 0}
+  - m_SerializedGuid:
+      m_GuidLow: 5462631428286029364
+      m_GuidHigh: 13046194997092993437
+    m_SerializedTextureGuid:
+      m_GuidLow: 5401139556644584846
+      m_GuidHigh: 4723296658446025096
+    m_Size: {x: 0.057, y: 0.08894078}
+    m_SpecifySize: 0
+    m_Name: axe
+    m_Texture: {fileID: 0}
