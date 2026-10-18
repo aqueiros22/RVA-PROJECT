@@ -1277,6 +1277,72 @@ MonoBehaviour:
   armorPartsRoot: {fileID: 1003529558}
   facePartsRoot: {fileID: 1003529557}
   showHelmet: 0
+--- !u!1 &1177110315
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1177110318}
+  - component: {fileID: 1177110317}
+  - component: {fileID: 1177110316}
+  m_Layer: 0
+  m_Name: Player Setup
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1177110316
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1177110315}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1cd02c4569807934d9cb1f523ef6beae, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerSetupUI
+  playerPrefab: {fileID: 6775566527582106909, guid: 241e250ae7c639e4fa5849326e877ca3, type: 3}
+  openOnStart: 1
+--- !u!114 &1177110317
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1177110315}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 34845777ade502441af8b73e9014d945, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerProfiles
+  players:
+  - name: Jogador 1
+    armor: 000000000000000000000000000000000000000000000000
+    showHelmet: 1
+  - name: Jogador 2
+    armor: 010000000100000001000000010000000100000001000000
+    showHelmet: 1
+--- !u!4 &1177110318
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1177110315}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1832012929
 GameObject:
   m_ObjectHideFlags: 0
@@ -1322,7 +1388,7 @@ Transform:
   m_GameObject: {fileID: 1832012929}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -2.1435795, y: -1.2147083, z: 3.8041887}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -1345,7 +1411,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   m_SerializedLibrary: {fileID: 11400000, guid: 4fcb50d86bc91e2438811cfe60b1da1d, type: 2}
-  m_MaxNumberOfMovingImages: 2
+  m_MaxNumberOfMovingImages: 4
   m_TrackedImagePrefab: {fileID: 0}
 --- !u!114 &1832012933
 MonoBehaviour:
@@ -1369,7 +1435,7 @@ MonoBehaviour:
   heightAboveCard: 0.03
   positionSmoothing: 12
   rotationSmoothing: 10
-  scaleSmoothing: 8
+  scaleSmoothing: 2
   lostTrackingGraceTime: 0.4
   showDebugInfo: 1
 --- !u!1 &1871728372
@@ -1655,3 +1721,4 @@ SceneRoots:
   - {fileID: 6734239}
   - {fileID: 1832012931}
   - {fileID: 1003529555}
+  - {fileID: 1177110318}

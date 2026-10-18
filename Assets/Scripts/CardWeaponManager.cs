@@ -101,6 +101,13 @@ public class CardWeaponManager : MonoBehaviour
         GameObject instance = Instantiate(prefab);
         instance.SetActive(false);
 
+        if (prefab == playerPrefab)
+        {
+            // player1 -> index 0, player2 -> index 1
+            var avatar = instance.AddComponent<PlayerAvatar>();
+            avatar.playerIndex = trackedImage.referenceImage.name.Contains("2") ? 1 : 0;
+        }
+
         spawnedWeapons[trackedImage.trackableId] = new SpawnedWeapon
         {
             instance = instance,
