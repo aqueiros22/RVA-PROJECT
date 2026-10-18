@@ -1015,6 +1015,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: GanzSe Free Modular Character Original 1_0
       objectReference: {fileID: 0}
+    - target: {fileID: 6775566527582106909, guid: 241e250ae7c639e4fa5849326e877ca3, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 6888824292853139327, guid: 241e250ae7c639e4fa5849326e877ca3, type: 3}
       propertyPath: m_IsActive
       value: 0
@@ -1358,8 +1362,16 @@ MonoBehaviour:
   trackedImageManager: {fileID: 1832012932}
   swordPrefab: {fileID: 2136704047189009653, guid: f77d9a23f21c6db4598f86a64dc55bf2, type: 3}
   axePrefab: {fileID: 2136704047189009653, guid: fd27573fe3bf3dd4d824886cbef789d0, type: 3}
-  proportionalWeaponScale: {x: 1, y: 1, z: 1}
+  playerPrefab: {fileID: 6775566527582106909, guid: 241e250ae7c639e4fa5849326e877ca3, type: 3}
+  playerFacingYaw: 0
+  playerHeightPerCardSize: 1.5
+  weaponHeightPerCardSize: 1.5
   heightAboveCard: 0.03
+  positionSmoothing: 12
+  rotationSmoothing: 10
+  scaleSmoothing: 8
+  lostTrackingGraceTime: 0.4
+  showDebugInfo: 1
 --- !u!1 &1871728372
 GameObject:
   m_ObjectHideFlags: 0

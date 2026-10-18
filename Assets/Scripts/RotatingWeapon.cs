@@ -18,10 +18,10 @@ public class RotatingWeapon : MonoBehaviour
 
     void Update()
     {
-        // 1\. Rotates the sword on its Y axis
-        transform.Rotate(Vector3.up, rotationSpeed * Time.deltaTime, Space.World);
+        // 1. Rotates the weapon around the card's normal (works with the card on a table or on a wall)
+        transform.Rotate(Vector3.up, rotationSpeed * Time.deltaTime, Space.Self);
 
-        // 2\. Makes the sword float smoothly up and down
+        // 2. Makes the weapon float smoothly up and down
         float newY = initialLocalPosition.y + Mathf.Sin(Time.time * hoverFrequency) * hoverAmplitude;
         transform.localPosition = new Vector3(initialLocalPosition.x, newY, initialLocalPosition.z);
     }
