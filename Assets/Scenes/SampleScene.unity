@@ -1431,6 +1431,13 @@ MonoBehaviour:
   playerPrefab: {fileID: 6775566527582106909, guid: 241e250ae7c639e4fa5849326e877ca3, type: 3}
   playerFacingYaw: 0
   playerHeightPerCardSize: 1.5
+  playerAnimator: {fileID: 9100000, guid: b34410f7924c50a4c8a03dcf7b5175cc, type: 2}
+  equipDistanceInCards: 1.3
+  equipTime: 0.8
+  equippedWeaponHeight: 0.45
+  gripRotation: {x: 0, y: 0, z: 90}
+  gripOffset: {x: 0, y: 0, z: 0}
+  equipRingMaterial: {fileID: 2100000, guid: e8864f032c81d9740a29bdadaad61d21, type: 2}
   weaponHeightPerCardSize: 1.5
   heightAboveCard: 0.03
   positionSmoothing: 12
