@@ -8,6 +8,33 @@ public class PlayerAvatar : MonoBehaviour
     public float labelHeight = 2.3f;
     public Color labelColor = Color.yellow;
     public RuntimeAnimatorController animatorController;
+    public string attackTriggerPrefix = "SwordAttack";
+    public event System.Action<AttackDirection> attacked;
+    public AttackDirection? LastAttack { get; private set; }
+
+    public bool TryAttack(AttackDirection direction)
+    {
+        if (!HasWeapon || !isActiveAndEnabled) return false;
+        LastAttack = direction;
+        var animator = GetComponent<Animator>();
+        string trigger = attackTriggerPrefix + direction;
+        // Missing animations/parameters are allowed during prototyping.
+        if (animator != null && animator.runtimeAnimatorController != null)
+        {
+            foreach (var parameter in animator.parameters)
+                if (parameter.type == AnimatorControllerParameterType.Trigger && parameter.name == trigger)
+                {
+                    foreach (var other in animator.parameters)
+                        if (other.type == AnimatorControllerParameterType.Trigger &&
+                            (other.name.StartsWith("SwordAttack") || other.name.StartsWith("AxeAttack")))
+                            animator.ResetTrigger(other.nameHash);
+                    animator.SetTrigger(parameter.nameHash);
+                    break;
+                }
+        }
+        attacked?.Invoke(direction);
+        return true;
+    }
 
     // Character height in its own local units, used to size the weapon in the hand
     private const float CharacterHeight = 2f;

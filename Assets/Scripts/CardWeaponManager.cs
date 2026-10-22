@@ -70,6 +70,22 @@ public class CardWeaponManager : MonoBehaviour
     private readonly Dictionary<TrackableId, SpawnedWeapon> spawnedWeapons = new Dictionary<TrackableId, SpawnedWeapon>();
     private readonly Dictionary<GameObject, float> prefabHeights = new Dictionary<GameObject, float>();
 
+    void Awake()
+    {
+        // Uses the existing AR camera; no second webcam or camera permission flow.
+        if (GetComponent<RedTipAttackTracker>() == null)
+            gameObject.AddComponent<RedTipAttackTracker>();
+    }
+
+    public PlayerAvatar GetAttackPlayer(int playerIndex)
+    {
+        foreach (var player in spawnedWeapons.Values)
+            if (player.isPlayer && player.visible && player.avatar != null &&
+                player.avatar.isActiveAndEnabled && player.avatar.playerIndex == playerIndex && player.avatar.HasWeapon)
+                return player.avatar;
+        return null;
+    }
+
     void OnEnable()
     {
         if (trackedImageManager != null)
@@ -105,6 +121,8 @@ public class CardWeaponManager : MonoBehaviour
         {
             if (spawnedWeapons.TryGetValue(removed.Key, out var weapon))
             {
+                if (weapon.equippedTo != null && weapon.equippedTo.avatar != null)
+                    weapon.equippedTo.avatar.Unequip();
                 foreach (var other in spawnedWeapons.Values)
                 {
                     if (other.equippedTo == weapon) other.equippedTo = null;
@@ -358,6 +376,7 @@ public class CardWeaponManager : MonoBehaviour
         }
 
         player.avatar.Equip(weapon.prefab, weapon.baseHeight, equippedWeaponHeight, gripOffset, Quaternion.Euler(gripRotation));
+        player.avatar.attackTriggerPrefix = weapon.prefab == swordPrefab ? "SwordAttack" : "AxeAttack";
         weapon.equippedTo = player;
     }
 
