@@ -119,66 +119,6 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
---- !u!1 &6734236
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 6734239}
-  - component: {fileID: 6734238}
-  - component: {fileID: 6734237}
-  m_Layer: 0
-  m_Name: AR Session
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &6734237
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6734236}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fa850fbd5b8aded44846f96e35f1a9f5, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.XR.ARFoundation::UnityEngine.XR.ARFoundation.ARInputManager
---- !u!114 &6734238
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6734236}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3859a92a05d4f5d418cb6ca605290e74, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.XR.ARFoundation::UnityEngine.XR.ARFoundation.ARSession
-  m_AttemptUpdate: 1
-  m_MatchFrameRate: 1
-  m_TrackingMode: 2
---- !u!4 &6734239
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6734236}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -2.1435795, y: -1.2147083, z: 3.8041887}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &410087039
 GameObject:
   m_ObjectHideFlags: 0
@@ -1352,33 +1292,16 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1832012931}
-  - component: {fileID: 1832012930}
   - component: {fileID: 1832012932}
   - component: {fileID: 1832012933}
+  - component: {fileID: 1832012934}
   m_Layer: 0
-  m_Name: XR Origin
+  m_Name: Vuforia Arena
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1832012930
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1832012929}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e0cb9aa70a22847b5925ee5f067c10a9, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.XR.CoreUtils::Unity.XR.CoreUtils.XROrigin
-  m_Camera: {fileID: 1871728378}
-  m_OriginBaseGameObject: {fileID: 1832012929}
-  m_CameraFloorOffsetObject: {fileID: 794133459}
-  m_RequestedTrackingOriginMode: 0
-  m_CameraYOffset: 1.1176
 --- !u!4 &1832012931
 Transform:
   m_ObjectHideFlags: 0
@@ -1404,15 +1327,16 @@ MonoBehaviour:
   m_GameObject: {fileID: 1832012929}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4dea56a9eaadd1c439095de4f9a371cb, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.XR.ARFoundation::UnityEngine.XR.ARFoundation.ARTrackedImageManager
-  <trackablesChanged>k__BackingField:
-    m_PersistentCalls:
-      m_Calls: []
-  m_SerializedLibrary: {fileID: 11400000, guid: 4fcb50d86bc91e2438811cfe60b1da1d, type: 2}
-  m_MaxNumberOfMovingImages: 4
-  m_TrackedImagePrefab: {fileID: 0}
+  m_Script: {fileID: 11500000, guid: 3ee7faa8ab7a477da9c9c1932b5c050b, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::VuforiaArenaSetup
+  arCamera: {fileID: 1871728378}
+  databasePath: Vuforia/arena.xml
+  targetNames:
+  - sword
+  - axe
+  - player1
+  - player2
 --- !u!114 &1832012933
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1425,12 +1349,18 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c7a9d912cfda7f143b57ed856dc80f9f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CardWeaponManager
-  trackedImageManager: {fileID: 1832012932}
   swordPrefab: {fileID: 2136704047189009653, guid: f77d9a23f21c6db4598f86a64dc55bf2, type: 3}
   axePrefab: {fileID: 2136704047189009653, guid: fd27573fe3bf3dd4d824886cbef789d0, type: 3}
   playerPrefab: {fileID: 6775566527582106909, guid: 241e250ae7c639e4fa5849326e877ca3, type: 3}
   playerFacingYaw: 0
   playerHeightPerCardSize: 1.5
+  playerAnimator: {fileID: 9100000, guid: b34410f7924c50a4c8a03dcf7b5175cc, type: 2}
+  equipDistanceInCards: 1.3
+  equipTime: 0.8
+  equippedWeaponHeight: 0.45
+  gripRotation: {x: 0, y: 0, z: 90}
+  gripOffset: {x: 0, y: 0, z: 0}
+  equipRingMaterial: {fileID: 2100000, guid: e8864f032c81d9740a29bdadaad61d21, type: 2}
   weaponHeightPerCardSize: 1.5
   heightAboveCard: 0.03
   positionSmoothing: 12
@@ -1438,6 +1368,32 @@ MonoBehaviour:
   scaleSmoothing: 2
   lostTrackingGraceTime: 0.4
   showDebugInfo: 1
+--- !u!114 &1832012934
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1832012929}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 129f02c13bfd49d1b1973a7ae903bbc9, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::RedTipAttackTracker
+  playerIndex: 0
+  trackingEnabled: 1
+  showOverlay: 1
+  sampleWidth: 160
+  minimumSaturation: 0.6
+  minimumBrightness: 0.25
+  redHueTolerance: 0.055
+  minimumBlobPixels: 5
+  maximumBlobFraction: 0.08
+  flipCameraY: 0
+  gestureDistance: 0.12
+  gestureWindow: 0.45
+  attackCooldown: 0.65
+  axisDominance: 1.3
 --- !u!1 &1871728372
 GameObject:
   m_ObjectHideFlags: 0
@@ -1449,12 +1405,9 @@ GameObject:
   - component: {fileID: 1871728373}
   - component: {fileID: 1871728378}
   - component: {fileID: 1871728377}
-  - component: {fileID: 1871728376}
-  - component: {fileID: 1871728375}
-  - component: {fileID: 1871728374}
   - component: {fileID: 1871728379}
   m_Layer: 0
-  m_Name: Main Camera
+  m_Name: ARCamera
   m_TagString: MainCamera
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1475,140 +1428,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 794133460}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1871728374
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1871728372}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c2fadf230d1919748a9aa21d40f74619, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.InputSystem::UnityEngine.InputSystem.XR.TrackedPoseDriver
-  m_TrackingType: 0
-  m_UpdateType: 0
-  m_IgnoreTrackingState: 0
-  m_PositionInput:
-    m_UseReference: 0
-    m_Action:
-      m_Name: Position
-      m_Type: 0
-      m_ExpectedControlType: Vector3
-      m_Id: 2157df56-3cbd-45f7-bf59-17efd1fe969d
-      m_Processors: 
-      m_Interactions: 
-      m_SingletonActionBindings:
-      - m_Name: 
-        m_Id: 9aa0b010-f8e1-4a84-bbc4-7c1ebe511ddc
-        m_Path: <XRHMD>/centerEyePosition
-        m_Interactions: 
-        m_Processors: 
-        m_Groups: 
-        m_Action: Position
-        m_Flags: 0
-      - m_Name: 
-        m_Id: 0285bf0b-1e4e-4300-b02c-4d509016697c
-        m_Path: <HandheldARInputDevice>/devicePosition
-        m_Interactions: 
-        m_Processors: 
-        m_Groups: 
-        m_Action: Position
-        m_Flags: 0
-      m_Flags: 0
-    m_Reference: {fileID: 0}
-  m_RotationInput:
-    m_UseReference: 0
-    m_Action:
-      m_Name: Rotation
-      m_Type: 0
-      m_ExpectedControlType: Quaternion
-      m_Id: 667d30f8-d999-4dd6-8ff0-d8ca57ab6771
-      m_Processors: 
-      m_Interactions: 
-      m_SingletonActionBindings:
-      - m_Name: 
-        m_Id: cac09a5e-6740-4c4d-8c1d-261adc140055
-        m_Path: <XRHMD>/centerEyeRotation
-        m_Interactions: 
-        m_Processors: 
-        m_Groups: 
-        m_Action: Rotation
-        m_Flags: 0
-      - m_Name: 
-        m_Id: 5177614a-f76d-4243-ac15-9391dc1cec35
-        m_Path: <HandheldARInputDevice>/deviceRotation
-        m_Interactions: 
-        m_Processors: 
-        m_Groups: 
-        m_Action: Rotation
-        m_Flags: 0
-      m_Flags: 0
-    m_Reference: {fileID: 0}
-  m_TrackingStateInput:
-    m_UseReference: 0
-    m_Action:
-      m_Name: Tracking State
-      m_Type: 0
-      m_ExpectedControlType: Integer
-      m_Id: de288326-606c-4aa7-bd8f-c976eed0afb5
-      m_Processors: 
-      m_Interactions: 
-      m_SingletonActionBindings: []
-      m_Flags: 0
-    m_Reference: {fileID: 0}
-  m_PositionAction:
-    m_Name: 
-    m_Type: 0
-    m_ExpectedControlType: 
-    m_Id: 9bb7bd37-d5c9-4dde-90ff-fc7705f6cdc8
-    m_Processors: 
-    m_Interactions: 
-    m_SingletonActionBindings: []
-    m_Flags: 0
-  m_RotationAction:
-    m_Name: 
-    m_Type: 0
-    m_ExpectedControlType: 
-    m_Id: 8d31088b-866d-4a97-b598-2d3f7d2bf9b3
-    m_Processors: 
-    m_Interactions: 
-    m_SingletonActionBindings: []
-    m_Flags: 0
---- !u!114 &1871728375
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1871728372}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 816b289ef451e094f9ae174fb4cf8db0, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.XR.ARFoundation::UnityEngine.XR.ARFoundation.ARCameraBackground
-  m_UseCustomMaterial: 0
-  m_CustomMaterial: {fileID: 0}
---- !u!114 &1871728376
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1871728372}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4966719baa26e4b0e8231a24d9bd491a, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.XR.ARFoundation::UnityEngine.XR.ARFoundation.ARCameraManager
-  m_FocusMode: -1
-  m_LightEstimationMode: -1
-  m_AutoFocus: 1
-  m_ImageStabilization: 0
-  m_LightEstimation: 0
-  m_FacingDirection: 1
-  m_RenderMode: 0
 --- !u!81 &1871728377
 AudioListener:
   m_ObjectHideFlags: 0
@@ -1718,7 +1537,6 @@ SceneRoots:
   m_Roots:
   - {fileID: 410087041}
   - {fileID: 832575519}
-  - {fileID: 6734239}
   - {fileID: 1832012931}
   - {fileID: 1003529555}
   - {fileID: 1177110318}

@@ -7,8 +7,41 @@ public class PlayerAvatar : MonoBehaviour
     // Label height in the character's local units (the model is about 2 units tall)
     public float labelHeight = 2.3f;
     public Color labelColor = Color.yellow;
+    public RuntimeAnimatorController animatorController;
+    public string attackTriggerPrefix = "SwordAttack";
+    public event System.Action<AttackDirection> attacked;
+    public AttackDirection? LastAttack { get; private set; }
+
+    public bool TryAttack(AttackDirection direction)
+    {
+        if (!HasWeapon || !isActiveAndEnabled) return false;
+        LastAttack = direction;
+        var animator = GetComponent<Animator>();
+        string trigger = attackTriggerPrefix + direction;
+        // Missing animations/parameters are allowed during prototyping.
+        if (animator != null && animator.runtimeAnimatorController != null)
+        {
+            foreach (var parameter in animator.parameters)
+                if (parameter.type == AnimatorControllerParameterType.Trigger && parameter.name == trigger)
+                {
+                    foreach (var other in animator.parameters)
+                        if (other.type == AnimatorControllerParameterType.Trigger &&
+                            (other.name.StartsWith("SwordAttack") || other.name.StartsWith("AxeAttack")))
+                            animator.ResetTrigger(other.nameHash);
+                    animator.SetTrigger(parameter.nameHash);
+                    break;
+                }
+        }
+        attacked?.Invoke(direction);
+        return true;
+    }
+
+    // Character height in its own local units, used to size the weapon in the hand
+    private const float CharacterHeight = 2f;
 
     private Transform armorRoot;
+    private Transform handBone;
+    private GameObject equippedWeapon;
     private Transform faceRoot;
     private TextMesh label;
     private Camera mainCamera;
@@ -18,6 +51,13 @@ public class PlayerAvatar : MonoBehaviour
         armorRoot = transform.Find("ARMOR PARTS");
         faceRoot = transform.Find("FACE DETAILS PARTS");
         CreateLabel();
+
+        var animator = GetComponent<Animator>();
+        if (animator != null && animatorController != null)
+        {
+            animator.runtimeAnimatorController = animatorController;
+            animator.applyRootMotion = false;
+        }
 
         if (PlayerProfiles.Instance != null)
         {
@@ -82,6 +122,63 @@ public class PlayerAvatar : MonoBehaviour
         {
             label.text = profile.name;
         }
+    }
+
+    public bool HasWeapon => equippedWeapon != null;
+
+    // Puts a weapon in the right hand, replacing the current one
+    public void Equip(GameObject weaponPrefab, float weaponBaseHeight, float heightFraction, Vector3 gripOffset, Quaternion gripRotation)
+    {
+        Unequip();
+        if (handBone == null)
+        {
+            handBone = FindDeep(transform, "hand_r");
+        }
+        Transform parent = handBone != null ? handBone : transform;
+
+        equippedWeapon = Instantiate(weaponPrefab, parent);
+        equippedWeapon.name = weaponPrefab.name + " (Equipped)";
+        // No spinning or floating while in the hand
+        foreach (var spin in equippedWeapon.GetComponentsInChildren<RotatingWeapon>(true))
+        {
+            Destroy(spin);
+        }
+
+        Transform t = equippedWeapon.transform;
+        t.localPosition = gripOffset;
+        t.localRotation = gripRotation;
+
+        // Size relative to the character, whatever the scale of the bones
+        float parentToRoot = parent.lossyScale.y / Mathf.Max(0.0001f, transform.lossyScale.y);
+        float localHeight = CharacterHeight * heightFraction / Mathf.Max(0.0001f, weaponBaseHeight);
+        t.localScale = Vector3.one * (localHeight / Mathf.Max(0.0001f, parentToRoot));
+        equippedWeapon.SetActive(true);
+    }
+
+    public void Unequip()
+    {
+        if (equippedWeapon != null)
+        {
+            Destroy(equippedWeapon);
+            equippedWeapon = null;
+        }
+    }
+
+    private static Transform FindDeep(Transform parent, string name)
+    {
+        foreach (Transform child in parent)
+        {
+            if (child.name == name)
+            {
+                return child;
+            }
+            Transform found = FindDeep(child, name);
+            if (found != null)
+            {
+                return found;
+            }
+        }
+        return null;
     }
 
     private static void ShowOnly(Transform category, int index)

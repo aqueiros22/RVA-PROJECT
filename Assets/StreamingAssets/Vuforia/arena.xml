@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<QCARConfig>
+  <Tracking>
+    <ImageTarget name="sword" size="0.063000 0.087980" />
+    <ImageTarget name="player2" size="0.063000 0.087980" />
+    <ImageTarget name="player1" size="0.063000 0.087980" />
+    <ImageTarget name="axe" size="0.063000 0.087980" />
+  </Tracking>
+</QCARConfig>

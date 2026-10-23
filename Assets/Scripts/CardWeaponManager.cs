@@ -1,11 +1,9 @@
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.XR.ARFoundation;
-using UnityEngine.XR.ARSubsystems;
+using Vuforia;
 
 public class CardWeaponManager : MonoBehaviour
 {
-    public ARTrackedImageManager trackedImageManager;
 
     [Header("Prefabs")]
     public GameObject swordPrefab;
@@ -17,6 +15,21 @@ public class CardWeaponManager : MonoBehaviour
     public float playerFacingYaw = 0f;
     // Character height as a multiple of the card's longest side
     public float playerHeightPerCardSize = 1.5f;
+    // Idle animation applied to the characters (humanoid)
+    public RuntimeAnimatorController playerAnimator;
+
+    [Header("Equipping (weapon card next to a player card)")]
+    // Max distance between card centers to equip, in card lengths (1 = cards touching end to end)
+    public float equipDistanceInCards = 1.3f;
+    // Time the cards must stay close before the weapon is equipped
+    public float equipTime = 0.8f;
+    // Weapon height in the hand, as a fraction of the character height
+    public float equippedWeaponHeight = 0.45f;
+    // Weapon pose relative to the hand bone (tweak in Play mode)
+    public Vector3 gripRotation = new Vector3(0f, 0f, 90f);
+    public Vector3 gripOffset = Vector3.zero;
+    // Material of the progress ring drawn around the player card
+    public Material equipRingMaterial;
 
     [Header("Size (relative to the detected card)")]
     // Weapon height as a multiple of the card's longest side
@@ -38,60 +51,57 @@ public class CardWeaponManager : MonoBehaviour
     private class SpawnedWeapon
     {
         public GameObject instance;
-        public ARTrackedImage image;
+        public ImageTargetBehaviour image;
         public float baseHeight;     // prefab height at scale 1
         public bool isPlayer;
         public float lastTrackedTime;
         public bool placed;
+        public GameObject prefab;
+        public bool visible;
+        public PlayerAvatar avatar;          // players only
+        public SpawnedWeapon equippedTo;     // weapons only: player holding it
+        public SpawnedWeapon equipTarget;    // weapons only: player it is being equipped to
+        public float equipProgress;
+        public LineRenderer ring;
     }
 
-    private readonly Dictionary<TrackableId, SpawnedWeapon> spawnedWeapons = new Dictionary<TrackableId, SpawnedWeapon>();
+    private readonly Dictionary<int, SpawnedWeapon> spawnedWeapons = new Dictionary<int, SpawnedWeapon>();
     private readonly Dictionary<GameObject, float> prefabHeights = new Dictionary<GameObject, float>();
 
-    void OnEnable()
+    void Awake()
     {
-        if (trackedImageManager != null)
+        // Shares the Vuforia camera with the red tip tracker.
+        if (GetComponent<RedTipAttackTracker>() == null)
+            gameObject.AddComponent<RedTipAttackTracker>();
+    }
+
+    public PlayerAvatar GetAttackPlayer(int playerIndex)
+    {
+        foreach (var player in spawnedWeapons.Values)
+            if (player.isPlayer && player.visible && player.avatar != null &&
+                player.avatar.isActiveAndEnabled && player.avatar.playerIndex == playerIndex && player.avatar.HasWeapon)
+                return player.avatar;
+        return null;
+    }
+
+    public void RegisterTarget(ImageTargetBehaviour target)
+    {
+        if (target != null && !spawnedWeapons.ContainsKey(target.GetInstanceID()))
+            TrySpawnWeapon(target);
+    }
+
+    void OnDestroy()
+    {
+        foreach (var weapon in spawnedWeapons.Values)
         {
-            trackedImageManager.trackablesChanged.AddListener(OnTrackablesChanged);
+            if (weapon.instance != null) Destroy(weapon.instance);
+            if (weapon.ring != null) Destroy(weapon.ring.gameObject);
         }
     }
 
-    void OnDisable()
+    private void TrySpawnWeapon(ImageTargetBehaviour trackedImage)
     {
-        if (trackedImageManager != null)
-        {
-            trackedImageManager.trackablesChanged.RemoveListener(OnTrackablesChanged);
-        }
-    }
-
-    private void OnTrackablesChanged(ARTrackablesChangedEventArgs<ARTrackedImage> eventArgs)
-    {
-        foreach (var trackedImage in eventArgs.added)
-        {
-            TrySpawnWeapon(trackedImage);
-        }
-
-        foreach (var trackedImage in eventArgs.updated)
-        {
-            if (!spawnedWeapons.ContainsKey(trackedImage.trackableId))
-            {
-                TrySpawnWeapon(trackedImage);
-            }
-        }
-
-        foreach (var removed in eventArgs.removed)
-        {
-            if (spawnedWeapons.TryGetValue(removed.Key, out var weapon))
-            {
-                Destroy(weapon.instance);
-                spawnedWeapons.Remove(removed.Key);
-            }
-        }
-    }
-
-    private void TrySpawnWeapon(ARTrackedImage trackedImage)
-    {
-        GameObject prefab = GetPrefabFor(trackedImage.referenceImage.name);
+        GameObject prefab = GetPrefabFor(trackedImage.TargetName);
         if (prefab == null)
         {
             return;
@@ -105,15 +115,18 @@ public class CardWeaponManager : MonoBehaviour
         {
             // player1 -> index 0, player2 -> index 1
             var avatar = instance.AddComponent<PlayerAvatar>();
-            avatar.playerIndex = trackedImage.referenceImage.name.Contains("2") ? 1 : 0;
+            avatar.playerIndex = trackedImage.TargetName.Contains("2") ? 1 : 0;
+            avatar.animatorController = playerAnimator;
         }
 
-        spawnedWeapons[trackedImage.trackableId] = new SpawnedWeapon
+        spawnedWeapons[trackedImage.GetInstanceID()] = new SpawnedWeapon
         {
             instance = instance,
             image = trackedImage,
             baseHeight = GetPrefabHeight(prefab),
             isPlayer = prefab == playerPrefab,
+            prefab = prefab,
+            avatar = instance.GetComponent<PlayerAvatar>(),
             lastTrackedTime = -1f,
             placed = false
         };
@@ -173,20 +186,23 @@ public class CardWeaponManager : MonoBehaviour
 
         foreach (var weapon in spawnedWeapons.Values)
         {
-            ARTrackedImage image = weapon.image;
+            ImageTargetBehaviour image = weapon.image;
             if (image == null || weapon.instance == null)
             {
                 continue;
             }
 
-            // Limited on ARCore means "last known pose": the card isn't actually being seen
-            if (image.trackingState == TrackingState.Tracking)
+            // Moving cards require direct observation, not an extended last-known pose.
+            if (image.TargetStatus.Status == Status.TRACKED)
             {
                 weapon.lastTrackedTime = now;
             }
 
             bool visible = weapon.lastTrackedTime >= 0f && now - weapon.lastTrackedTime <= lostTrackingGraceTime;
-            if (!visible)
+            weapon.visible = visible;
+            // An equipped weapon lives in the player's hand, not on its card
+            bool showModel = visible && (weapon.isPlayer || weapon.equippedTo == null);
+            if (!showModel)
             {
                 if (weapon.instance.activeSelf)
                 {
@@ -197,7 +213,7 @@ public class CardWeaponManager : MonoBehaviour
                 continue;
             }
 
-            float cardSize = Mathf.Max(image.size.x, image.size.y);
+            float cardSize = Mathf.Max(image.GetSize().x, image.GetSize().y);
             if (cardSize <= 0f)
             {
                 continue;
@@ -233,23 +249,156 @@ public class CardWeaponManager : MonoBehaviour
             t.rotation = Quaternion.Slerp(t.rotation, targetRotation, 1f - Mathf.Exp(-rotationSmoothing * dt));
             t.localScale = Vector3.Lerp(t.localScale, Vector3.one * targetScale, 1f - Mathf.Exp(-scaleSmoothing * dt));
         }
+
+        UpdateEquipping();
+    }
+
+    private static float CardSize(ImageTargetBehaviour image)
+    {
+        return Mathf.Max(image.GetSize().x, image.GetSize().y);
+    }
+
+    // Equips a weapon to the closest player whose card stays next to the weapon card
+    private void UpdateEquipping()
+    {
+        float dt = Time.deltaTime;
+
+        foreach (var weapon in spawnedWeapons.Values)
+        {
+            if (weapon.isPlayer)
+            {
+                continue;
+            }
+
+            SpawnedWeapon closest = null;
+            if (weapon.visible && weapon.image != null)
+            {
+                float best = float.MaxValue;
+                foreach (var player in spawnedWeapons.Values)
+                {
+                    if (!player.isPlayer || !player.visible || player.avatar == null || player.image == null)
+                    {
+                        continue;
+                    }
+                    float maxDistance = equipDistanceInCards * Mathf.Max(CardSize(weapon.image), CardSize(player.image));
+                    float distance = Vector3.Distance(weapon.image.transform.position, player.image.transform.position);
+                    if (distance < maxDistance && distance < best)
+                    {
+                        best = distance;
+                        closest = player;
+                    }
+                }
+            }
+
+            // Already in this player's hand: nothing to do
+            if (closest != null && closest == weapon.equippedTo)
+            {
+                closest = null;
+            }
+
+            if (closest != weapon.equipTarget)
+            {
+                weapon.equipTarget = closest;
+                weapon.equipProgress = 0f;
+            }
+
+            if (closest == null)
+            {
+                SetRing(weapon, null, 0f);
+                continue;
+            }
+
+            weapon.equipProgress += dt;
+            float progress = Mathf.Clamp01(weapon.equipProgress / Mathf.Max(0.01f, equipTime));
+            SetRing(weapon, closest, progress);
+
+            if (progress >= 1f)
+            {
+                Equip(weapon, closest);
+                weapon.equipTarget = null;
+                weapon.equipProgress = 0f;
+                SetRing(weapon, null, 0f);
+            }
+        }
+    }
+
+    private void Equip(SpawnedWeapon weapon, SpawnedWeapon player)
+    {
+        // The weapon leaves its previous owner
+        if (weapon.equippedTo != null && weapon.equippedTo.avatar != null)
+        {
+            weapon.equippedTo.avatar.Unequip();
+        }
+
+        // The weapon this player was holding goes back to its card
+        foreach (var other in spawnedWeapons.Values)
+        {
+            if (other != weapon && other.equippedTo == player)
+            {
+                other.equippedTo = null;
+            }
+        }
+
+        player.avatar.Equip(weapon.prefab, weapon.baseHeight, equippedWeaponHeight, gripOffset, Quaternion.Euler(gripRotation));
+        player.avatar.attackTriggerPrefix = weapon.prefab == swordPrefab ? "SwordAttack" : "AxeAttack";
+        weapon.equippedTo = player;
+    }
+
+    private void SetRing(SpawnedWeapon weapon, SpawnedWeapon player, float progress)
+    {
+        if (player == null || progress <= 0f)
+        {
+            if (weapon.ring != null)
+            {
+                weapon.ring.enabled = false;
+            }
+            return;
+        }
+
+        if (weapon.ring == null)
+        {
+            var ringObject = new GameObject("Equip Ring");
+            weapon.ring = ringObject.AddComponent<LineRenderer>();
+            weapon.ring.useWorldSpace = true;
+            weapon.ring.numCapVertices = 4;
+            weapon.ring.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            if (equipRingMaterial != null)
+            {
+                weapon.ring.sharedMaterial = equipRingMaterial;
+            }
+        }
+
+        // Arc around the player card that fills up while the cards stay close
+        Transform card = player.image.transform;
+        float cardSize = CardSize(player.image);
+        float radius = cardSize * 0.7f;
+        int segments = Mathf.Max(2, Mathf.CeilToInt(64 * progress));
+        weapon.ring.enabled = true;
+        weapon.ring.widthMultiplier = cardSize * 0.06f;
+        weapon.ring.positionCount = segments + 1;
+        for (int i = 0; i <= segments; i++)
+        {
+            float angle = progress * Mathf.PI * 2f * i / segments;
+            Vector3 local = new Vector3(Mathf.Sin(angle), 0f, Mathf.Cos(angle)) * radius;
+            weapon.ring.SetPosition(i, card.position + card.rotation * local + card.up * (cardSize * 0.02f));
+        }
     }
 
     void OnGUI()
     {
-        if (!showDebugInfo || trackedImageManager == null)
+        if (!showDebugInfo)
         {
             return;
         }
 
         var lines = new System.Text.StringBuilder();
-        lines.AppendLine($"AR Session: {ARSession.state} ({ARSession.notTrackingReason})");
-        var library = trackedImageManager.referenceLibrary;
-        lines.AppendLine($"Cards in library: {(library != null ? library.count : 0)}");
-        foreach (var image in trackedImageManager.trackables)
+        lines.AppendLine("Vuforia - cartoes: " + spawnedWeapons.Count);
+        foreach (var weapon in spawnedWeapons.Values)
         {
-            Vector2 size = image.size * 100f;
-            lines.AppendLine($"{image.referenceImage.name}: {image.trackingState}  {size.x:F1} x {size.y:F1} cm");
+            var image = weapon.image;
+            if (image == null) continue;
+            Vector2 size = image.GetSize() * 100f;
+            lines.AppendLine($"{image.TargetName}: {image.TargetStatus.Status} ({image.TargetStatus.StatusInfo})  {size.x:F1} x {size.y:F1} cm");
         }
 
         var style = new GUIStyle(GUI.skin.label) { fontSize = Mathf.Max(24, Screen.height / 50) };
