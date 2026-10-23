@@ -1,15 +1,14 @@
-using Unity.Collections;
 using UnityEngine;
-using UnityEngine.XR.ARFoundation;
-using UnityEngine.XR.ARSubsystems;
+using Vuforia;
 
 public enum AttackDirection { Up, Down, Left, Right }
 
-// Screen-space colour tracking, sharing the AR Foundation camera with image tracking.
+// Screen-space colour tracking using the same Vuforia camera as the cards.
 [RequireComponent(typeof(CardWeaponManager))]
 public class RedTipAttackTracker : MonoBehaviour
 {
-    public ARCameraManager cameraManager;
+    [Tooltip("Extra clockwise rotation of the camera image, for device calibration.")]
+    [Range(0, 3)] public int cameraQuarterTurns;
     [Min(0)] public int playerIndex;
     public bool trackingEnabled = true;
     public bool showOverlay = true;
@@ -29,8 +28,8 @@ public class RedTipAttackTracker : MonoBehaviour
 
     private CardWeaponManager manager;
     private PlayerAvatar target;
-    private Matrix4x4 display;
-    private bool hasDisplay, hasTip, hasAnchor;
+    private bool formatRegistered, hasTip, hasAnchor;
+    private VuforiaBehaviour vuforia;
     private Vector2 tip, anchor;
     private float nextSample, anchorTime, nextAttack, lastSeen;
     private bool[] mask;
@@ -40,17 +39,38 @@ public class RedTipAttackTracker : MonoBehaviour
     private string status = "Equipa uma arma para comecar";
     private string lastAttack = "-";
 
-    void OnEnable()
+    void Start()
     {
         manager = GetComponent<CardWeaponManager>();
-        if (cameraManager == null) cameraManager = FindAnyObjectByType<ARCameraManager>();
-        if (cameraManager != null) cameraManager.frameReceived += OnFrame;
+        vuforia = VuforiaBehaviour.Instance;
+        VuforiaApplication.Instance.OnVuforiaStarted += RegisterFormat;
+        VuforiaApplication.Instance.OnVuforiaStopped += OnStopped;
+        if (vuforia != null) vuforia.World.OnStateUpdated += OnFrame;
+        RegisterFormat();
     }
 
-    void OnDisable()
+    void RegisterFormat()
     {
-        if (cameraManager != null) cameraManager.frameReceived -= OnFrame;
-        hasTip = hasAnchor = hasDisplay = false;
+        if (vuforia != null && VuforiaApplication.Instance.IsRunning)
+            formatRegistered = vuforia.CameraDevice.SetFrameFormat(PixelFormat.RGB888, true);
+    }
+
+    void OnStopped()
+    {
+        formatRegistered = false;
+        hasTip = hasAnchor = false;
+    }
+
+    void OnDestroy()
+    {
+        VuforiaApplication.Instance.OnVuforiaStarted -= RegisterFormat;
+        VuforiaApplication.Instance.OnVuforiaStopped -= OnStopped;
+        if (vuforia != null)
+        {
+            vuforia.World.OnStateUpdated -= OnFrame;
+            if (formatRegistered && VuforiaApplication.Instance.IsRunning)
+                vuforia.CameraDevice.SetFrameFormat(PixelFormat.RGB888, false);
+        }
     }
 
     void Update()
@@ -58,14 +78,14 @@ public class RedTipAttackTracker : MonoBehaviour
         if (hasTip && Time.unscaledTime - lastSeen > 0.2f) hasTip = hasAnchor = false;
     }
 
-    void OnFrame(ARCameraFrameEventArgs args)
+    void OnFrame()
     {
+        if (!isActiveAndEnabled) return;
         if (orientation != Screen.orientation)
         {
             orientation = Screen.orientation;
-            hasDisplay = hasTip = hasAnchor = false;
+            hasTip = hasAnchor = false;
         }
-        if (args.displayMatrix.HasValue) { display = args.displayMatrix.Value; hasDisplay = true; }
         var player = manager.GetAttackPlayer(playerIndex);
         if (target != player) { target = player; hasAnchor = false; }
         if (!trackingEnabled || target == null)
@@ -75,27 +95,12 @@ public class RedTipAttackTracker : MonoBehaviour
             return;
         }
         float now = Time.unscaledTime;
-        if (!hasDisplay || now < nextSample) return;
+        if (now < nextSample) return;
+        if (!formatRegistered) { status = "Vuforia: imagem RGB indisponivel"; return; }
         nextSample = now + 1f / 20f;
-        if (!cameraManager.TryAcquireLatestCpuImage(out var image)) return;
-        using (image)
-        {
-            if (!image.FormatSupported(TextureFormat.RGB24)) { status = "Camera sem conversao RGB24"; return; }
-            int width = Mathf.Min(320, image.width);
-            int height = Mathf.Max(1, image.height * width / image.width);
-            var conversion = new XRCpuImage.ConversionParams
-            {
-                inputRect = new RectInt(0, 0, image.width, image.height),
-                outputDimensions = new Vector2Int(width, height),
-                outputFormat = TextureFormat.RGB24,
-                transformation = XRCpuImage.Transformation.None
-            };
-            using (var rgb = new NativeArray<byte>(image.GetConvertedDataSize(conversion), Allocator.Temp))
-            {
-                image.Convert(conversion, new NativeSlice<byte>(rgb));
-                hasTip = FindTip(rgb, width, height, out tip);
-            }
-        }
+        var image = vuforia.CameraDevice.GetCameraImage(PixelFormat.RGB888);
+        if (image == null || image.Pixels == null) return;
+        hasTip = FindTip(image.Pixels, image.Width, image.Height, image.Stride, out tip);
         if (!hasTip) { hasAnchor = false; status = "Ponta vermelha nao encontrada"; return; }
         lastSeen = now;
         status = "Ponta detetada: move a caneta";
@@ -119,7 +124,7 @@ public class RedTipAttackTracker : MonoBehaviour
         hasAnchor = false;
     }
 
-    bool FindTip(NativeArray<byte> rgb, int width, int height, out Vector2 position)
+    bool FindTip(byte[] rgb, int width, int height, int stride, out Vector2 position)
     {
         position = default;
         gridWidth = Mathf.Clamp(sampleWidth, 80, 320);
@@ -130,14 +135,29 @@ public class RedTipAttackTracker : MonoBehaviour
         for (int x = 0; x < gridWidth; x++)
         {
             float u = (x + 0.5f) / gridWidth, v = (y + 0.5f) / gridHeight;
-            // Same row-vector UV transform used by the installed ARCore background shader.
-            float tx = display.m00 * u + display.m10 * v + display.m20;
-            float ty = display.m01 * u + display.m11 * v + display.m21;
+            // Vuforia camera buffers are in sensor orientation. Rotate then apply
+            // the aspect-fill crop used by the camera background.
+            int turns = cameraQuarterTurns;
+#if !UNITY_EDITOR
+            if (Screen.orientation == ScreenOrientation.Portrait) turns += 1;
+            else if (Screen.orientation == ScreenOrientation.PortraitUpsideDown) turns += 3;
+            else if (Screen.orientation == ScreenOrientation.LandscapeRight) turns += 2;
+#endif
+            turns %= 4;
+            float imageAspect = (turns % 2 == 0) ? (float)width / height : (float)height / width;
+            float screenAspect = (float)Screen.width / Screen.height;
+            if (imageAspect > screenAspect) u = (u - 0.5f) * screenAspect / imageAspect + 0.5f;
+            else v = (v - 0.5f) * imageAspect / screenAspect + 0.5f;
+            float tx = u, ty = 1f - v;
+            if (turns == 1) { tx = v; ty = u; }
+            else if (turns == 2) { tx = 1f - u; ty = v; }
+            else if (turns == 3) { tx = 1f - v; ty = 1f - u; }
             if (flipCameraY) ty = 1f - ty;
             int cell = y * gridWidth + x;
             mask[cell] = false;
             if (tx < 0 || tx >= 1 || ty < 0 || ty >= 1) continue;
-            int pixel = (Mathf.Min(height - 1, (int)(ty * height)) * width + Mathf.Min(width - 1, (int)(tx * width))) * 3;
+            int pixel = Mathf.Min(height - 1, (int)(ty * height)) * stride + Mathf.Min(width - 1, (int)(tx * width)) * 3;
+            if (pixel + 2 >= rgb.Length) continue;
             Color.RGBToHSV(new Color(rgb[pixel] / 255f, rgb[pixel + 1] / 255f, rgb[pixel + 2] / 255f), out float hue, out float saturation, out float value);
             mask[cell] = (hue <= redHueTolerance || hue >= 1f - redHueTolerance) && saturation >= minimumSaturation && value >= minimumBrightness;
         }

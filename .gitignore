@@ -60,7 +60,7 @@ sysinfo.txt
 *.aab
 *.unitypackage
 *.app
-
+/Packages/com.ptc.vuforia.engine-11.4.4.tgz
 # Crashlytics generated file
 crashlytics-build.properties
 

@@ -1,11 +1,9 @@
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.XR.ARFoundation;
-using UnityEngine.XR.ARSubsystems;
+using Vuforia;
 
 public class CardWeaponManager : MonoBehaviour
 {
-    public ARTrackedImageManager trackedImageManager;
 
     [Header("Prefabs")]
     public GameObject swordPrefab;
@@ -53,7 +51,7 @@ public class CardWeaponManager : MonoBehaviour
     private class SpawnedWeapon
     {
         public GameObject instance;
-        public ARTrackedImage image;
+        public ImageTargetBehaviour image;
         public float baseHeight;     // prefab height at scale 1
         public bool isPlayer;
         public float lastTrackedTime;
@@ -67,12 +65,12 @@ public class CardWeaponManager : MonoBehaviour
         public LineRenderer ring;
     }
 
-    private readonly Dictionary<TrackableId, SpawnedWeapon> spawnedWeapons = new Dictionary<TrackableId, SpawnedWeapon>();
+    private readonly Dictionary<int, SpawnedWeapon> spawnedWeapons = new Dictionary<int, SpawnedWeapon>();
     private readonly Dictionary<GameObject, float> prefabHeights = new Dictionary<GameObject, float>();
 
     void Awake()
     {
-        // Uses the existing AR camera; no second webcam or camera permission flow.
+        // Shares the Vuforia camera with the red tip tracker.
         if (GetComponent<RedTipAttackTracker>() == null)
             gameObject.AddComponent<RedTipAttackTracker>();
     }
@@ -86,58 +84,24 @@ public class CardWeaponManager : MonoBehaviour
         return null;
     }
 
-    void OnEnable()
+    public void RegisterTarget(ImageTargetBehaviour target)
     {
-        if (trackedImageManager != null)
+        if (target != null && !spawnedWeapons.ContainsKey(target.GetInstanceID()))
+            TrySpawnWeapon(target);
+    }
+
+    void OnDestroy()
+    {
+        foreach (var weapon in spawnedWeapons.Values)
         {
-            trackedImageManager.trackablesChanged.AddListener(OnTrackablesChanged);
+            if (weapon.instance != null) Destroy(weapon.instance);
+            if (weapon.ring != null) Destroy(weapon.ring.gameObject);
         }
     }
 
-    void OnDisable()
+    private void TrySpawnWeapon(ImageTargetBehaviour trackedImage)
     {
-        if (trackedImageManager != null)
-        {
-            trackedImageManager.trackablesChanged.RemoveListener(OnTrackablesChanged);
-        }
-    }
-
-    private void OnTrackablesChanged(ARTrackablesChangedEventArgs<ARTrackedImage> eventArgs)
-    {
-        foreach (var trackedImage in eventArgs.added)
-        {
-            TrySpawnWeapon(trackedImage);
-        }
-
-        foreach (var trackedImage in eventArgs.updated)
-        {
-            if (!spawnedWeapons.ContainsKey(trackedImage.trackableId))
-            {
-                TrySpawnWeapon(trackedImage);
-            }
-        }
-
-        foreach (var removed in eventArgs.removed)
-        {
-            if (spawnedWeapons.TryGetValue(removed.Key, out var weapon))
-            {
-                if (weapon.equippedTo != null && weapon.equippedTo.avatar != null)
-                    weapon.equippedTo.avatar.Unequip();
-                foreach (var other in spawnedWeapons.Values)
-                {
-                    if (other.equippedTo == weapon) other.equippedTo = null;
-                    if (other.equipTarget == weapon) other.equipTarget = null;
-                }
-                if (weapon.ring != null) Destroy(weapon.ring.gameObject);
-                Destroy(weapon.instance);
-                spawnedWeapons.Remove(removed.Key);
-            }
-        }
-    }
-
-    private void TrySpawnWeapon(ARTrackedImage trackedImage)
-    {
-        GameObject prefab = GetPrefabFor(trackedImage.referenceImage.name);
+        GameObject prefab = GetPrefabFor(trackedImage.TargetName);
         if (prefab == null)
         {
             return;
@@ -151,11 +115,11 @@ public class CardWeaponManager : MonoBehaviour
         {
             // player1 -> index 0, player2 -> index 1
             var avatar = instance.AddComponent<PlayerAvatar>();
-            avatar.playerIndex = trackedImage.referenceImage.name.Contains("2") ? 1 : 0;
+            avatar.playerIndex = trackedImage.TargetName.Contains("2") ? 1 : 0;
             avatar.animatorController = playerAnimator;
         }
 
-        spawnedWeapons[trackedImage.trackableId] = new SpawnedWeapon
+        spawnedWeapons[trackedImage.GetInstanceID()] = new SpawnedWeapon
         {
             instance = instance,
             image = trackedImage,
@@ -222,14 +186,14 @@ public class CardWeaponManager : MonoBehaviour
 
         foreach (var weapon in spawnedWeapons.Values)
         {
-            ARTrackedImage image = weapon.image;
+            ImageTargetBehaviour image = weapon.image;
             if (image == null || weapon.instance == null)
             {
                 continue;
             }
 
-            // Limited on ARCore means "last known pose": the card isn't actually being seen
-            if (image.trackingState == TrackingState.Tracking)
+            // Moving cards require direct observation, not an extended last-known pose.
+            if (image.TargetStatus.Status == Status.TRACKED)
             {
                 weapon.lastTrackedTime = now;
             }
@@ -249,7 +213,7 @@ public class CardWeaponManager : MonoBehaviour
                 continue;
             }
 
-            float cardSize = Mathf.Max(image.size.x, image.size.y);
+            float cardSize = Mathf.Max(image.GetSize().x, image.GetSize().y);
             if (cardSize <= 0f)
             {
                 continue;
@@ -289,9 +253,9 @@ public class CardWeaponManager : MonoBehaviour
         UpdateEquipping();
     }
 
-    private static float CardSize(ARTrackedImage image)
+    private static float CardSize(ImageTargetBehaviour image)
     {
-        return Mathf.Max(image.size.x, image.size.y);
+        return Mathf.Max(image.GetSize().x, image.GetSize().y);
     }
 
     // Equips a weapon to the closest player whose card stays next to the weapon card
@@ -422,19 +386,19 @@ public class CardWeaponManager : MonoBehaviour
 
     void OnGUI()
     {
-        if (!showDebugInfo || trackedImageManager == null)
+        if (!showDebugInfo)
         {
             return;
         }
 
         var lines = new System.Text.StringBuilder();
-        lines.AppendLine($"AR Session: {ARSession.state} ({ARSession.notTrackingReason})");
-        var library = trackedImageManager.referenceLibrary;
-        lines.AppendLine($"Cards in library: {(library != null ? library.count : 0)}");
-        foreach (var image in trackedImageManager.trackables)
+        lines.AppendLine("Vuforia - cartoes: " + spawnedWeapons.Count);
+        foreach (var weapon in spawnedWeapons.Values)
         {
-            Vector2 size = image.size * 100f;
-            lines.AppendLine($"{image.referenceImage.name}: {image.trackingState}  {size.x:F1} x {size.y:F1} cm");
+            var image = weapon.image;
+            if (image == null) continue;
+            Vector2 size = image.GetSize() * 100f;
+            lines.AppendLine($"{image.TargetName}: {image.TargetStatus.Status} ({image.TargetStatus.StatusInfo})  {size.x:F1} x {size.y:F1} cm");
         }
 
         var style = new GUIStyle(GUI.skin.label) { fontSize = Mathf.Max(24, Screen.height / 50) };
