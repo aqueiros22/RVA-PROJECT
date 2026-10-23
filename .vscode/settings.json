@@ -67,6 +67,6 @@
         "*.sln": "*.csproj",
         "*.slnx": "*.csproj"
     },
-    "dotnet.defaultSolution": "Arena.slnx",
+    "dotnet.defaultSolution": "RVA-PROJECT.slnx",
     "dotnet.enableWorkspaceBasedDevelopment": false
 }
