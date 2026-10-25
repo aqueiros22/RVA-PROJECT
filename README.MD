@@ -51,6 +51,73 @@ Damage is rounded to the nearest whole number.
 - Shield vs Sword, not blocked: 10 × 1.5 = **15**.
 - Hammer vs Axe, blocked: 25 × 1 × 50% = **13**.
 
-## Changes needed in the project
-- The pen panel currently shows *"Last attack: …"*. It has to stay hidden during the defense so it doesn't give away the direction.
-- The "Switch player" button is no longer needed: the game says whose turn it is.
+## Roadmap
+
+### ✅ Done
+- [x] Vuforia tracking of 8 cards at once: `player1`, `player2`, `sword`, `axe`, `dagger`, `hammer`, `shield`, `shield2`.
+- [x] Characters and weapons appear on their cards, scaled to the card size.
+- [x] Equipping: a weapon card held next to a player card for 0.8 s goes to that character's hand.
+- [x] Per-weapon pose in the hand (`WeaponGrip` component on the weapon prefab).
+- [x] Red-tip pen tracking that reads 4 gestures (up, down, left, right). *Not tested on device yet.*
+- [x] Combat animations in `Assets/Animations/PlayerCombat.controller` (Mixamo, humanoid, baked in place so the character stays on its card):
+
+  | Action | Trigger | Animation |
+  |---|---|---|
+  | Attack up | `AttackUp` | Down_up_Slash |
+  | Attack down | `AttackDown` | Up_down_Slash |
+  | Attack left | `AttackLeft` | Right_to_left_slash |
+  | Attack right | `AttackRight` | Left_to_right_slash |
+  | Block a vertical attack | `Block` | Block_standing |
+  | Dodge a side attack | `Crouch` | Crouch |
+  | KO | `Die` | Death (stays down) |
+
+  Same slashes for every weapon; the axe and the hammer play them at 80% speed. Code: `PlayerAvatar.TryAttack`, `PlayDefense`, `PlayDeath`.
+- [x] Import rules for every FBX in `Assets/Animations` (`AnimationImporter`): humanoid rig, whole take, only the Idle loops.
+- [x] Player customisation (name and armour).
+- [x] Testing without a webcam: Vuforia Simulator plus the `Simulator Cards` layout (**Arena → Criar cartoes do simulador**).
+- [x] Testing without the pen (Editor only, `KeyboardCombatInput` on `Vuforia Arena`): **1/2** pick the player, **arrows** attack, **Shift+arrows** defend, **K** die, **R** back to Idle.
+
+### 1. Weapon data and class icons
+- [ ] `WeaponStats` component on each weapon prefab: class (Light / Heavy / Defense), base damage, block %. Values from the **Damage** table above.
+- [ ] Three class icons (Light, Heavy, Defense) as sprites.
+- [ ] Icons floating over each weapon on its card, always facing the camera:
+  - **below the weapon:** the icon of its own class;
+  - **above the weapon, in green:** the class it is strong against;
+  - **above the weapon, in red:** the class it is weak against.
+  
+  Example: the Axe shows the Heavy icon below it, the Defense icon in green and the Light icon in red above it.
+- [ ] Hide the icons once the weapon is in a character's hand.
+
+### 2. Combat core
+- [ ] Health (100 HP) for each player, with a health bar above the character next to the name label.
+- [ ] Damage calculation (base damage × class multiplier × block), as described in **Damage**.
+- [ ] Defense gesture: the pen gesture is stored as the defender's block direction.
+- [ ] Hit result on screen: "Blocked!" or "Hit!" plus the damage, with the defender playing `PlayDefense` on a block and `PlayDeath` at 0 HP.
+- [ ] Test and tune the red-tip pen on a real device.
+
+### 3. Turn and round flow
+- [ ] Game state machine: pick weapons → attack 1 (defend, then attack) → attack 2 → next round → game over.
+- [ ] On-screen prompts for each step ("Player B: choose your defense. Player A: don't look!", "Player A: attack!", …).
+- [ ] Pen panel: hide *"Last attack: …"* during the defense so it doesn't give away the direction.
+- [ ] Remove the "Switch player" button: the game decides whose turn it is.
+- [ ] Turn order: A first in round 1, B in round 2, the player with less HP in round 3.
+- [ ] Cards used in a round can't be equipped again in the same game.
+- [ ] Each player can only equip a weapon onto their own character during the pick step.
+- [ ] Game over screen: winner by KO or by HP, tie-break by blocks, then draw. "Play again" button.
+
+### 4. Feedback and polish
+- [ ] Floating damage numbers and a spark effect on a block.
+- [ ] Hit reaction animation on the defender.
+- [ ] Sound per weapon (swing, hit, block).
+- [ ] Short in-game tutorial / rules screen.
+
+### 5. Device and playtesting
+- [ ] Android build tested on a phone with the printed cards.
+- [ ] Playtest sessions to balance the numbers (damage, block %, multipliers).
+- [ ] Print sheet with all 8 cards at the right size (6.3 cm wide).
+
+### Later ideas (not planned yet)
+- Special ability per card.
+- Gesture quality (speed and length of the stroke) as a damage multiplier.
+- Arena marker that changes the rules of a match.
+- Two pens (red and blue), one per player.

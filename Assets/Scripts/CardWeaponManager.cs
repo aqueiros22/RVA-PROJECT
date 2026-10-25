@@ -88,6 +88,16 @@ public class CardWeaponManager : MonoBehaviour
         return null;
     }
 
+    // A visible player, with or without a weapon
+    public PlayerAvatar GetPlayer(int playerIndex)
+    {
+        foreach (var player in spawnedWeapons.Values)
+            if (player.isPlayer && player.visible && player.avatar != null &&
+                player.avatar.isActiveAndEnabled && player.avatar.playerIndex == playerIndex)
+                return player.avatar;
+        return null;
+    }
+
     public void RegisterTarget(ImageTargetBehaviour target)
     {
         if (target != null && !spawnedWeapons.ContainsKey(target.GetInstanceID()))
@@ -359,9 +369,9 @@ public class CardWeaponManager : MonoBehaviour
         Vector3 offset = grip != null ? grip.offset : gripOffset;
         Vector3 rotation = grip != null ? grip.rotation : gripRotation;
         player.avatar.Equip(weapon.prefab, weapon.baseHeight, equippedWeaponHeight, offset, Quaternion.Euler(rotation));
-        // Heavy weapons use the axe swings, the rest the sword swings
+        // Heavy weapons swing slower
         bool heavy = weapon.prefab == axePrefab || weapon.prefab == hammerPrefab;
-        player.avatar.attackTriggerPrefix = heavy ? "AxeAttack" : "SwordAttack";
+        player.avatar.attackSpeed = heavy ? 0.8f : 1f;
         weapon.equippedTo = player;
     }
 

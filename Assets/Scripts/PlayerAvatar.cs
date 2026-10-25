@@ -8,7 +8,8 @@ public class PlayerAvatar : MonoBehaviour
     public float labelHeight = 2.3f;
     public Color labelColor = Color.yellow;
     public RuntimeAnimatorController animatorController;
-    public string attackTriggerPrefix = "SwordAttack";
+    // Playback speed of the attack animations (heavy weapons swing slower)
+    public float attackSpeed = 1f;
     public event System.Action<AttackDirection> attacked;
     public AttackDirection? LastAttack { get; private set; }
 
@@ -17,23 +18,46 @@ public class PlayerAvatar : MonoBehaviour
         if (!HasWeapon || !isActiveAndEnabled) return false;
         LastAttack = direction;
         var animator = GetComponent<Animator>();
-        string trigger = attackTriggerPrefix + direction;
-        // Missing animations/parameters are allowed during prototyping.
-        if (animator != null && animator.runtimeAnimatorController != null)
-        {
-            foreach (var parameter in animator.parameters)
-                if (parameter.type == AnimatorControllerParameterType.Trigger && parameter.name == trigger)
-                {
-                    foreach (var other in animator.parameters)
-                        if (other.type == AnimatorControllerParameterType.Trigger &&
-                            (other.name.StartsWith("SwordAttack") || other.name.StartsWith("AxeAttack")))
-                            animator.ResetTrigger(other.nameHash);
-                    animator.SetTrigger(parameter.nameHash);
-                    break;
-                }
-        }
+        if (HasParameter(animator, "AttackSpeed", AnimatorControllerParameterType.Float))
+            animator.SetFloat("AttackSpeed", attackSpeed);
+        PlayTrigger("Attack" + direction);
         attacked?.Invoke(direction);
         return true;
+    }
+
+    // Successful defense: vertical swings are blocked, side swings are ducked under
+    public void PlayDefense(AttackDirection attack)
+    {
+        bool vertical = attack == AttackDirection.Up || attack == AttackDirection.Down;
+        PlayTrigger(vertical ? "Block" : "Crouch");
+    }
+
+    public void PlayDeath()
+    {
+        PlayTrigger("Die");
+    }
+
+    // Fires a trigger, clearing pending ones so actions don't queue up.
+    // Missing animations/parameters are allowed during prototyping.
+    private void PlayTrigger(string trigger)
+    {
+        var animator = GetComponent<Animator>();
+        if (!HasParameter(animator, trigger, AnimatorControllerParameterType.Trigger))
+            return;
+        foreach (var parameter in animator.parameters)
+            if (parameter.type == AnimatorControllerParameterType.Trigger)
+                animator.ResetTrigger(parameter.nameHash);
+        animator.SetTrigger(trigger);
+    }
+
+    private static bool HasParameter(Animator animator, string name, AnimatorControllerParameterType type)
+    {
+        if (animator == null || animator.runtimeAnimatorController == null)
+            return false;
+        foreach (var parameter in animator.parameters)
+            if (parameter.type == type && parameter.name == name)
+                return true;
+        return false;
     }
 
     // Character height in its own local units, used to size the weapon in the hand
