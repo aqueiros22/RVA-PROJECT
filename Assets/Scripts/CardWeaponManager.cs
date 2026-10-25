@@ -9,10 +9,16 @@ public class CardWeaponManager : MonoBehaviour
     public GameObject swordPrefab;
     public GameObject axePrefab;
     public GameObject shieldPrefab;
-    public GameObject shield2Prefab;
     public GameObject daggerPrefab;
     public GameObject hammerPrefab;
     public GameObject playerPrefab;
+
+    [Header("Prefabs of the II cards (sword2, axe2…)")]
+    public GameObject sword2Prefab;
+    public GameObject axe2Prefab;
+    public GameObject shield2Prefab;
+    public GameObject dagger2Prefab;
+    public GameObject hammer2Prefab;
 
     [Header("Players")]
     // Extra rotation so the character faces the arrow printed on the card
@@ -166,33 +172,31 @@ public class CardWeaponManager : MonoBehaviour
     private GameObject GetPrefabFor(string imageName)
     {
         string name = imageName.ToLower();
-        if (name.Contains("sword") || name.Contains("espada"))
-        {
-            return swordPrefab;
-        }
-        if (name.Contains("axe") || name.Contains("machado"))
-        {
-            return axePrefab;
-        }
-        if (name.Contains("shield2") || name.Contains("escudo2"))
-        {
-            return shield2Prefab;
-        }
-        if (name.Contains("shield") || name.Contains("escudo"))
-        {
-            return shieldPrefab;
-        }
-        if (name.Contains("dagger") || name.Contains("adaga"))
-        {
-            return daggerPrefab;
-        }
-        if (name.Contains("hammer") || name.Contains("martelo"))
-        {
-            return hammerPrefab;
-        }
         if (name.Contains("player") || name.Contains("jogador"))
         {
             return playerPrefab;
+        }
+        // Weapon cards ending in "2" (sword2, shield2…) are the II cards: same weapon, another model
+        bool second = name.EndsWith("2");
+        if (name.Contains("sword") || name.Contains("espada"))
+        {
+            return second ? sword2Prefab : swordPrefab;
+        }
+        if (name.Contains("axe") || name.Contains("machado"))
+        {
+            return second ? axe2Prefab : axePrefab;
+        }
+        if (name.Contains("shield") || name.Contains("escudo"))
+        {
+            return second ? shield2Prefab : shieldPrefab;
+        }
+        if (name.Contains("dagger") || name.Contains("adaga"))
+        {
+            return second ? dagger2Prefab : daggerPrefab;
+        }
+        if (name.Contains("hammer") || name.Contains("martelo"))
+        {
+            return second ? hammer2Prefab : hammerPrefab;
         }
         return null;
     }
@@ -391,7 +395,8 @@ public class CardWeaponManager : MonoBehaviour
         Vector3 rotation = grip != null ? grip.rotation : gripRotation;
         player.avatar.Equip(weapon.prefab, weapon.baseHeight, equippedWeaponHeight, offset, Quaternion.Euler(rotation));
         // Heavy weapons swing slower
-        bool heavy = weapon.prefab == axePrefab || weapon.prefab == hammerPrefab;
+        var stats = weapon.prefab.GetComponent<WeaponStats>();
+        bool heavy = stats != null && stats.weaponClass == WeaponClass.Heavy;
         player.avatar.attackSpeed = heavy ? 0.8f : 1f;
         weapon.equippedTo = player;
     }

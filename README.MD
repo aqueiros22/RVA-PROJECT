@@ -1,13 +1,23 @@
 # ⚔️ ARena Clash — Game Rules 
 
-A 2-player AR duel: each player draws weapon cards, and over 3 rounds they take turns attacking and defending with a single red-tip pen. Weapon classes beat each other rock-paper-scissors style, and defending means guessing the attack direction.
+A 2-player AR duel: each player picks 3 weapon cards from their own deck, and over 3 rounds they take turns attacking and defending with a single red-tip pen. Weapon classes beat each other rock-paper-scissors style, and defending means guessing the attack direction.
 
 ## Setup
-- Each player shuffles and draws **3 weapon cards**. If all 3 are from the same class, swap one.
+- **Player A** plays the `PLAYER 1` card and **Player B** the `PLAYER 2` card.
+- Each player has their own deck of 5 weapon cards, the same weapons in both:
+
+  | | Light | Light | Heavy | Heavy | Defense |
+  |---|---|---|---|---|---|
+  | **Player A** | Sword | Dagger | Axe | Hammer | Shield |
+  | **Player B** | Sword II | Dagger II | Axe II | Hammer II | Shield II |
+
+- Each player **chooses 3 of their 5 cards** (no draw) and keeps them hidden from the other player. The other 2 cards are not used this game.
 - Both players start with **100 HP**.
 
+Both decks are identical, so neither player gets luckier cards. Having only one Shield is part of the strategy: you decide whether to take it and when to play it.
+
 ## Each round (×3)
-1. **Pick:** both players place one card face down and flip it at the same time. A card is only detected once it is face up, so the reveal happens automatically. Then each player slides their card next to their own character to equip it.
+1. **Pick:** both players place one of their chosen cards face down and flip it at the same time. A card is only detected once it is face up, so the reveal happens automatically. Then each player slides their card next to their own character to equip it (Player A's cards only equip on `PLAYER 1`, Player B's on `PLAYER 2`).
 2. **Attack 1** (A attacks, B defends):
    1. The screen shows *"Player B: choose your defense. Player A: don't look!"*.
    2. B makes the defense gesture with the pen (up, down, left or right). The screen only confirms *"Defense chosen"* and **does not show the direction**.
@@ -54,7 +64,8 @@ Damage is rounded to the nearest whole number.
 ## Roadmap
 
 ### ✅ Done
-- [x] Vuforia tracking of 8 cards at once: `player1`, `player2`, `sword`, `axe`, `dagger`, `hammer`, `shield`, `shield2`.
+- [x] Vuforia tracking of 12 cards at once: `player1`, `player2`, Player A's deck (`sword`, `axe`, `dagger`, `hammer`, `shield`) and Player B's deck (`sword2`, `axe2`, `dagger2`, `hammer2`, `shield2`). Card labels in English.
+- [x] Player B's II cards use their own 3D models (`Sword2_Container`, `Axe2_Container`, `Dagger2_Container`, `Hammer2_Container`, `Shield2_Container`) with the same `WeaponStats` as Player A's.
 - [x] Characters and weapons appear on their cards, scaled to the card size.
 - [x] Equipping: a weapon card held next to a player card for 0.8 s goes to that character's hand.
 - [x] Per-weapon pose in the hand (`WeaponGrip` component on the weapon prefab).
@@ -102,7 +113,7 @@ Damage is rounded to the nearest whole number.
 - [ ] Remove the "Switch player" button: the game decides whose turn it is.
 - [ ] Turn order: A first in round 1, B in round 2, the player with less HP in round 3.
 - [ ] Cards used in a round can't be equipped again in the same game.
-- [ ] Each player can only equip a weapon onto their own character during the pick step.
+- [ ] Each deck only equips onto its own character: cards without "2" on `PLAYER 1`, II cards on `PLAYER 2` (today any weapon equips on the closest player).
 - [ ] Game over screen: winner by KO or by HP, tie-break by blocks, then draw. "Play again" button.
 
 ### 4. Feedback and polish
@@ -114,7 +125,7 @@ Damage is rounded to the nearest whole number.
 ### 5. Device and playtesting
 - [ ] Android build tested on a phone with the printed cards.
 - [ ] Playtest sessions to balance the numbers (damage, block %, multipliers).
-- [ ] Print sheet with all 8 cards at the right size (6.3 cm wide).
+- [ ] Print sheet with all 12 cards at the right size (6.3 cm wide), the English versions.
 
 ### Later ideas (not planned yet)
 - Special ability per card.
