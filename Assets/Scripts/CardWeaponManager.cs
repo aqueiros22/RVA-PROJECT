@@ -9,6 +9,7 @@ public class CardWeaponManager : MonoBehaviour
     public GameObject swordPrefab;
     public GameObject axePrefab;
     public GameObject shieldPrefab;
+    public GameObject shield2Prefab;
     public GameObject daggerPrefab;
     public GameObject hammerPrefab;
     public GameObject playerPrefab;
@@ -34,6 +35,13 @@ public class CardWeaponManager : MonoBehaviour
     public Vector3 gripOffset = Vector3.zero;
     // Material of the progress ring drawn around the player card
     public Material equipRingMaterial;
+
+    [Header("Class icons (shown over weapons with WeaponStats)")]
+    public Sprite lightIcon;
+    public Sprite heavyIcon;
+    public Sprite defenseIcon;
+    // Material using the Arena/ClassIcon shader, which tints the black symbols
+    public Material classIconMaterial;
 
     [Header("Size (relative to the detected card)")]
     // Weapon height as a multiple of the card's longest side
@@ -133,11 +141,20 @@ public class CardWeaponManager : MonoBehaviour
             avatar.animatorController = playerAnimator;
         }
 
+        float baseHeight = GetPrefabHeight(prefab);
+        var stats = instance.GetComponent<WeaponStats>();
+        if (stats != null && lightIcon != null && heavyIcon != null && defenseIcon != null && classIconMaterial != null)
+        {
+            // Indexed by WeaponClass
+            var sprites = new[] { lightIcon, heavyIcon, defenseIcon };
+            instance.AddComponent<WeaponIcons>().Setup(stats, baseHeight, sprites, classIconMaterial);
+        }
+
         spawnedWeapons[trackedImage.GetInstanceID()] = new SpawnedWeapon
         {
             instance = instance,
             image = trackedImage,
-            baseHeight = GetPrefabHeight(prefab),
+            baseHeight = baseHeight,
             isPlayer = prefab == playerPrefab,
             prefab = prefab,
             avatar = instance.GetComponent<PlayerAvatar>(),
@@ -156,6 +173,10 @@ public class CardWeaponManager : MonoBehaviour
         if (name.Contains("axe") || name.Contains("machado"))
         {
             return axePrefab;
+        }
+        if (name.Contains("shield2") || name.Contains("escudo2"))
+        {
+            return shield2Prefab;
         }
         if (name.Contains("shield") || name.Contains("escudo"))
         {

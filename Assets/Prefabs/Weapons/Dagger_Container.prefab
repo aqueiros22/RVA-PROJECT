@@ -9,6 +9,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 4391040360436155062}
+  - component: {fileID: 7879709642584270202}
   m_Layer: 0
   m_Name: Dagger_Container
   m_TagString: Untagged
@@ -32,6 +33,21 @@ Transform:
   - {fileID: 4065347528553769020}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &7879709642584270202
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8407589787152210842}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 277d1c6bfe9803644957f23d49e94a68, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WeaponStats
+  weaponClass: 0
+  baseDamage: 20
+  blockPassThrough: 0.4
 --- !u!1001 &4063831568168102778
 PrefabInstance:
   m_ObjectHideFlags: 0

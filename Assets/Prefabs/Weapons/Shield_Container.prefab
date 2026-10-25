@@ -10,6 +10,7 @@ GameObject:
   m_Component:
   - component: {fileID: 5460269794997449108}
   - component: {fileID: 9169424825537102868}
+  - component: {fileID: 6262628614312970568}
   m_Layer: 0
   m_Name: Shield_Container
   m_TagString: Untagged
@@ -47,6 +48,21 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WeaponGrip
   offset: {x: -0.043, y: 0.211, z: -0.387}
   rotation: {x: -5, y: -87, z: -122}
+--- !u!114 &6262628614312970568
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3006151474354485566}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 277d1c6bfe9803644957f23d49e94a68, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WeaponStats
+  weaponClass: 2
+  baseDamage: 10
+  blockPassThrough: 0.1
 --- !u!1001 &3280066582900731782
 PrefabInstance:
   m_ObjectHideFlags: 0

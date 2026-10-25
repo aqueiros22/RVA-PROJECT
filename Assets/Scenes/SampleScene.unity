@@ -2437,6 +2437,7 @@ MonoBehaviour:
   swordPrefab: {fileID: 2136704047189009653, guid: f77d9a23f21c6db4598f86a64dc55bf2, type: 3}
   axePrefab: {fileID: 2136704047189009653, guid: fd27573fe3bf3dd4d824886cbef789d0, type: 3}
   shieldPrefab: {fileID: 3006151474354485566, guid: a0533647aae463248a029a54dae8206a, type: 3}
+  shield2Prefab: {fileID: 3006151474354485566, guid: f5127c9eff02ced4fa0bd162ed8d7637, type: 3}
   daggerPrefab: {fileID: 8407589787152210842, guid: 8bf88108737ffe34faba8ecdf62b3558, type: 3}
   hammerPrefab: {fileID: 6312290941630243728, guid: fedf213dd3297e7439cfcd74f77ff489, type: 3}
   playerPrefab: {fileID: 6775566527582106909, guid: 241e250ae7c639e4fa5849326e877ca3, type: 3}
@@ -2449,6 +2450,10 @@ MonoBehaviour:
   gripRotation: {x: 185, y: 93, z: 58}
   gripOffset: {x: 0.042, y: 0.143, z: -0.098}
   equipRingMaterial: {fileID: 2100000, guid: e8864f032c81d9740a29bdadaad61d21, type: 2}
+  lightIcon: {fileID: 21300000, guid: 4f46472d9eb582649929cfea839d5c1e, type: 3}
+  heavyIcon: {fileID: 21300000, guid: f14328a0f7f928744b0d21b951d834fa, type: 3}
+  defenseIcon: {fileID: 21300000, guid: 523f9abff112549479814fabf9d8523e, type: 3}
+  classIconMaterial: {fileID: 2100000, guid: 6fdbe39ddc8e45348943ca4f8b596f82, type: 2}
   weaponHeightPerCardSize: 1
   heightAboveCard: 0.03
   positionSmoothing: 12

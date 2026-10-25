@@ -77,16 +77,16 @@ Damage is rounded to the nearest whole number.
 - [x] Testing without a webcam: Vuforia Simulator plus the `Simulator Cards` layout (**Arena → Criar cartoes do simulador**).
 - [x] Testing without the pen (Editor only, `KeyboardCombatInput` on `Vuforia Arena`): **1/2** pick the player, **arrows** attack, **Shift+arrows** defend, **K** die, **R** back to Idle.
 
-### 1. Weapon data and class icons
-- [ ] `WeaponStats` component on each weapon prefab: class (Light / Heavy / Defense), base damage, block %. Values from the **Damage** table above.
-- [ ] Three class icons (Light, Heavy, Defense) as sprites.
-- [ ] Icons floating over each weapon on its card, always facing the camera:
-  - **below the weapon:** the icon of its own class;
+### ✅ 1. Weapon data and class icons
+- [x] `WeaponStats` component on each weapon prefab: class (Light / Heavy / Defense), base damage, block %. Values from the **Damage** table above. `WeaponStats.StrongAgainst` / `WeakAgainst` hold the class cycle.
+- [x] Three class symbols in `Assets/Images/Symbol`: `Light_Symbol` (sword), `Heavy_Symbol` (axe), `Shield_Symbol`.
+- [x] Icons floating over each weapon on its card, always facing the camera (`WeaponIcons`, added by `CardWeaponManager`):
+  - **below the weapon, in white:** the icon of its own class;
   - **above the weapon, in green:** the class it is strong against;
   - **above the weapon, in red:** the class it is weak against.
-  
+
   Example: the Axe shows the Heavy icon below it, the Defense icon in green and the Light icon in red above it.
-- [ ] Hide the icons once the weapon is in a character's hand.
+- [x] The icons hide with the card's weapon once it is in a character's hand.
 
 ### 2. Combat core
 - [ ] Health (100 HP) for each player, with a health bar above the character next to the name label.
