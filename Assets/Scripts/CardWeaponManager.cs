@@ -8,6 +8,9 @@ public class CardWeaponManager : MonoBehaviour
     [Header("Prefabs")]
     public GameObject swordPrefab;
     public GameObject axePrefab;
+    public GameObject shieldPrefab;
+    public GameObject daggerPrefab;
+    public GameObject hammerPrefab;
     public GameObject playerPrefab;
 
     [Header("Players")]
@@ -25,7 +28,8 @@ public class CardWeaponManager : MonoBehaviour
     public float equipTime = 0.8f;
     // Weapon height in the hand, as a fraction of the character height
     public float equippedWeaponHeight = 0.45f;
-    // Weapon pose relative to the hand bone (tweak in Play mode)
+    // Default weapon pose relative to the hand bone (tweak in Play mode);
+    // a weapon prefab with a WeaponGrip component uses its own pose instead
     public Vector3 gripRotation = new Vector3(0f, 0f, 90f);
     public Vector3 gripOffset = Vector3.zero;
     // Material of the progress ring drawn around the player card
@@ -142,6 +146,18 @@ public class CardWeaponManager : MonoBehaviour
         if (name.Contains("axe") || name.Contains("machado"))
         {
             return axePrefab;
+        }
+        if (name.Contains("shield") || name.Contains("escudo"))
+        {
+            return shieldPrefab;
+        }
+        if (name.Contains("dagger") || name.Contains("adaga"))
+        {
+            return daggerPrefab;
+        }
+        if (name.Contains("hammer") || name.Contains("martelo"))
+        {
+            return hammerPrefab;
         }
         if (name.Contains("player") || name.Contains("jogador"))
         {
@@ -339,8 +355,13 @@ public class CardWeaponManager : MonoBehaviour
             }
         }
 
-        player.avatar.Equip(weapon.prefab, weapon.baseHeight, equippedWeaponHeight, gripOffset, Quaternion.Euler(gripRotation));
-        player.avatar.attackTriggerPrefix = weapon.prefab == swordPrefab ? "SwordAttack" : "AxeAttack";
+        var grip = weapon.prefab.GetComponent<WeaponGrip>();
+        Vector3 offset = grip != null ? grip.offset : gripOffset;
+        Vector3 rotation = grip != null ? grip.rotation : gripRotation;
+        player.avatar.Equip(weapon.prefab, weapon.baseHeight, equippedWeaponHeight, offset, Quaternion.Euler(rotation));
+        // Heavy weapons use the axe swings, the rest the sword swings
+        bool heavy = weapon.prefab == axePrefab || weapon.prefab == hammerPrefab;
+        player.avatar.attackTriggerPrefix = heavy ? "AxeAttack" : "SwordAttack";
         weapon.equippedTo = player;
     }
 

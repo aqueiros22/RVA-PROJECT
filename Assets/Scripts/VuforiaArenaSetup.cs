@@ -8,13 +8,14 @@ public class VuforiaArenaSetup : MonoBehaviour
     public Camera arCamera;
     [Tooltip("Path relative to StreamingAssets; keep the matching .dat beside the XML.")]
     public string databasePath = "Vuforia/arena.xml";
-    public string[] targetNames = { "sword", "axe", "player1", "player2" };
+    public string[] targetNames = { "sword", "axe", "shield", "shield2", "dagger", "hammer", "player1", "player2" };
     private bool targetsCreated;
 
     void Awake()
     {
         var config = VuforiaConfiguration.Instance;
-        config.Vuforia.MaxSimultaneousImageTargets = 4;
+        // Every card can be on the table at the same time
+        config.Vuforia.MaxSimultaneousImageTargets = Mathf.Max(1, targetNames.Length);
         config.DeviceTracker.ARCoreRequirementSetting = VuforiaConfiguration.DeviceTrackerConfiguration.ARCoreRequirement.DONT_USE;
         config.DeviceTracker.AutoImportArcoreSetting = false;
         config.DeviceTracker.AutoInitAndStartTracker = false;

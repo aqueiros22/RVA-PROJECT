@@ -18,7 +18,8 @@ public class VuforiaArenaConfiguration : IPreprocessBuildWithReport
     {
         if (EditorApplication.isPlayingOrWillChangePlaymode) return;
         var config = VuforiaConfiguration.Instance;
-        config.Vuforia.MaxSimultaneousImageTargets = 4;
+        // Matches the cards in VuforiaArenaSetup.targetNames
+        config.Vuforia.MaxSimultaneousImageTargets = 8;
         config.DeviceTracker.ARCoreRequirementSetting = VuforiaConfiguration.DeviceTrackerConfiguration.ARCoreRequirement.DONT_USE;
         config.DeviceTracker.AutoImportArcoreSetting = false;
         config.DeviceTracker.AutoInitAndStartTracker = false;
