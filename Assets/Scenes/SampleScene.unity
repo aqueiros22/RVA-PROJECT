@@ -2117,7 +2117,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!65 &1166767800
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -2205,7 +2205,7 @@ Transform:
   m_GameObject: {fileID: 1166767799}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.5, y: -0.82, z: -0.01954}
+  m_LocalPosition: {x: -1.289, y: -13.48, z: 2.54}
   m_LocalScale: {x: 200, y: 1, z: 200}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -2274,7 +2274,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerSetupUI
   playerPrefab: {fileID: 6775566527582106909, guid: 241e250ae7c639e4fa5849326e877ca3, type: 3}
-  openOnStart: 1
 --- !u!114 &1177110317
 MonoBehaviour:
   m_ObjectHideFlags: 0
