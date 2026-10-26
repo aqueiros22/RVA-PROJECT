@@ -86,7 +86,7 @@ Damage is rounded to the nearest whole number.
 - [x] Import rules for every FBX in `Assets/Animations` (`AnimationImporter`): humanoid rig, whole take, only the Idle loops.
 - [x] Player customisation (name and armour).
 - [x] Testing without a webcam: Vuforia Simulator plus the `Simulator Cards` layout (**Arena → Criar cartoes do simulador**).
-- [x] Testing without the pen (Editor only, `KeyboardCombatInput` on `Vuforia Arena`): **1/2** pick the player, **arrows** attack, **Shift+arrows** defend, **K** die, **R** back to Idle.
+- [x] Testing without the pen (Editor only, `KeyboardCombatInput` on `Vuforia Arena`): **arrow keys** submit the current defense or attack. The match selects the player. Confirm the pen handover with **Ready to attack**, and advance results with **Continue**.
 
 ### ✅ 1. Weapon data and class icons
 - [x] `WeaponStats` component on each weapon prefab: class (Light / Heavy / Defense), base damage, block %. Values from the **Damage** table above. `WeaponStats.StrongAgainst` / `WeakAgainst` hold the class cycle.
@@ -100,21 +100,21 @@ Damage is rounded to the nearest whole number.
 - [x] The icons hide with the card's weapon once it is in a character's hand.
 
 ### 2. Combat core
-- [ ] Health (100 HP) for each player, with a health bar above the character next to the name label.
-- [ ] Damage calculation (base damage × class multiplier × block), as described in **Damage**.
-- [ ] Defense gesture: the pen gesture is stored as the defender's block direction.
-- [ ] Hit result on screen: "Blocked!" or "Hit!" plus the damage, with the defender playing `PlayDefense` on a block and `PlayDeath` at 0 HP.
+- [x] Health (100 HP) for each player, with a health bar above the character next to the name label.
+- [x] Damage calculation (base damage × class multiplier × block), as described in **Damage**.
+- [x] Defense gesture: the pen gesture is stored as the defender's block direction.
+- [x] Hit result on screen: "Blocked!" or "Hit!" plus the damage, with the defender playing `PlayDefense` on a block and `PlayDeath` at 0 HP.
 - [ ] Test and tune the red-tip pen on a real device.
 
 ### 3. Turn and round flow
-- [ ] Game state machine: pick weapons → attack 1 (defend, then attack) → attack 2 → next round → game over.
-- [ ] On-screen prompts for each step ("Player B: choose your defense. Player A: don't look!", "Player A: attack!", …).
-- [ ] Pen panel: hide *"Last attack: …"* during the defense so it doesn't give away the direction.
-- [ ] Remove the "Switch player" button: the game decides whose turn it is.
-- [ ] Turn order: A first in round 1, B in round 2, the player with less HP in round 3.
-- [ ] Cards used in a round can't be equipped again in the same game.
-- [ ] Each deck only equips onto its own character: cards without "2" on `PLAYER 1`, II cards on `PLAYER 2` (today any weapon equips on the closest player).
-- [ ] Game over screen: winner by KO or by HP, tie-break by blocks, then draw. "Play again" button.
+- [x] Game state machine: pick weapons → attack 1 (defend, then attack) → attack 2 → next round → game over.
+- [x] On-screen prompts for each step ("Player B: choose your defense. Player A: don't look!", "Player A: attack!", …).
+- [x] Pen panel: hide *"Last attack: …"* during the defense so it doesn't give away the direction.
+- [x] Remove the "Switch player" button: the game decides whose turn it is.
+- [x] Turn order: A first in round 1, B in round 2, the player with less HP in round 3.
+- [x] Cards used in a round can't be equipped again in the same game.
+- [x] Each deck only equips onto its own character: cards without "2" on `PLAYER 1`, II cards on `PLAYER 2`.
+- [x] Game over screen: winner by KO or by HP, tie-break by blocks, then draw. "Play again" button.
 
 ### 4. Feedback and polish
 - [ ] Floating damage numbers and a spark effect on a block.
@@ -132,3 +132,17 @@ Damage is rounded to the nearest whole number.
 - Gesture quality (speed and length of the stroke) as a damage multiplier.
 - Arena marker that changes the rules of a match.
 - Two pens (red and blue), one per player.
+
+## Turn-flow implementation and validation
+
+`DuelMatch` holds the three-round rules, health, blocks, card ownership and consumed cards. `DuelController` starts after player customization and controls the HUD, animations and pen handover. Keep both player cards visible when entering gestures. A card locks when equipped; both players must equip before defense starts. Choose your three-card hand physically before the match, as in Setup above.
+
+Health bars appear above the characters and in the persistent HUD. The highlighted player and the English prompt identify the current input player. Defense input never displays a direction or animates a defense until the opponent attacks. **Play again** resets HP, blocks and used cards, keeping the customized characters.
+
+Run the standalone rules tests without a .NET SDK using Unity's bundled compiler/runtime:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File Tests/Run-DuelMatchTests.ps1
+```
+
+For another Unity installation, pass `-UnityEditor "path/to/Editor"`. Tests cover the README damage examples, all class pairings, turn order, input gating, card restrictions, KO, three-round progression and block tiebreaks. Webcam/pen recognition, animation timing, UI framing and Android still require Play Mode/device validation.

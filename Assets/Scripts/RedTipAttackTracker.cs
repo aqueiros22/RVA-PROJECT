@@ -1,8 +1,6 @@
 using UnityEngine;
 using Vuforia;
 
-public enum AttackDirection { Up, Down, Left, Right }
-
 // Screen-space colour tracking using the same Vuforia camera as the cards.
 [RequireComponent(typeof(CardWeaponManager))]
 public class RedTipAttackTracker : MonoBehaviour
@@ -28,6 +26,7 @@ public class RedTipAttackTracker : MonoBehaviour
 
     private CardWeaponManager manager;
     private PlayerAvatar target;
+    private DuelController duel;
     private bool formatRegistered, hasTip, hasAnchor;
     private VuforiaBehaviour vuforia;
     private Vector2 tip, anchor;
@@ -42,6 +41,7 @@ public class RedTipAttackTracker : MonoBehaviour
     void Start()
     {
         manager = GetComponent<CardWeaponManager>();
+        duel = GetComponent<DuelController>();
         vuforia = VuforiaBehaviour.Instance;
         VuforiaApplication.Instance.OnVuforiaStarted += RegisterFormat;
         VuforiaApplication.Instance.OnVuforiaStopped += OnStopped;
@@ -86,6 +86,11 @@ public class RedTipAttackTracker : MonoBehaviour
             orientation = Screen.orientation;
             hasTip = hasAnchor = false;
         }
+        if (duel != null)
+        {
+            if (!duel.AcceptsGesture) { hasTip = hasAnchor = false; return; }
+            playerIndex = duel.Match.InputPlayer;
+        }
         var player = manager.GetAttackPlayer(playerIndex);
         if (target != player) { target = player; hasAnchor = false; }
         if (!trackingEnabled || target == null)
@@ -116,7 +121,7 @@ public class RedTipAttackTracker : MonoBehaviour
         if (Mathf.Max(x, y) < gestureDistance || Mathf.Max(x, y) < Mathf.Min(x, y) * axisDominance) return;
         AttackDirection direction = x > y ? (delta.x > 0 ? AttackDirection.Right : AttackDirection.Left)
             : (delta.y > 0 ? AttackDirection.Up : AttackDirection.Down);
-        if (target.TryAttack(direction))
+        if (duel != null ? duel.SubmitGesture(direction) : target.TryAttack(direction))
         {
             lastAttack = DirectionLabel(direction);
             nextAttack = now + attackCooldown;
@@ -205,8 +210,18 @@ public class RedTipAttackTracker : MonoBehaviour
         }
     }
 
+    public void ResetGesture()
+    {
+        hasTip = hasAnchor = false;
+        target = null;
+        nextAttack = Time.unscaledTime + attackCooldown;
+        lastAttack = "-";
+    }
+
     void OnGUI()
     {
+        // Never expose the pen position or a secret defense in the match HUD.
+        if (duel != null) return;
         if (!showOverlay || manager == null || manager.SetupInProgress) return;
         float scale = Mathf.Max(1f, Screen.height / 900f);
         var style = new GUIStyle(GUI.skin.box) { fontSize = Mathf.RoundToInt(18 * scale), alignment = TextAnchor.MiddleLeft };

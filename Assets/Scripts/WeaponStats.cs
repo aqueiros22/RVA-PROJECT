@@ -1,7 +1,5 @@
 using UnityEngine;
 
-public enum WeaponClass { Light, Heavy, Defense }
-
 // Combat values of a weapon (see the Damage table in README.MD). Put on the weapon prefab's root.
 public class WeaponStats : MonoBehaviour
 {

@@ -87,10 +87,13 @@ public class CardWeaponManager : MonoBehaviour
     private readonly Dictionary<GameObject, float> prefabHeights = new Dictionary<GameObject, float>();
 
     private PlayerSetupUI playerSetup;
+    public DuelController Duel { get; private set; }
 
     void Awake()
     {
         playerSetup = FindAnyObjectByType<PlayerSetupUI>();
+        Duel = GetComponent<DuelController>();
+        if (Duel == null) Duel = gameObject.AddComponent<DuelController>();
         // Shares the Vuforia camera with the red tip tracker.
         if (GetComponent<RedTipAttackTracker>() == null)
             gameObject.AddComponent<RedTipAttackTracker>();
@@ -132,6 +135,27 @@ public class CardWeaponManager : MonoBehaviour
                 player.avatar.isActiveAndEnabled && player.avatar.playerIndex == playerIndex)
                 return player.avatar;
         return null;
+    }
+
+    // Includes temporarily untracked avatars, so health/death/restarts persist.
+    public PlayerAvatar GetAvatar(int playerIndex)
+    {
+        foreach (var player in spawnedWeapons.Values)
+            if (player.isPlayer && player.avatar != null && player.avatar.playerIndex == playerIndex)
+                return player.avatar;
+        return null;
+    }
+
+    public void ClearRoundWeapons()
+    {
+        foreach (var item in spawnedWeapons.Values)
+        {
+            if (item.avatar != null) item.avatar.Unequip();
+            item.equippedTo = null;
+            item.equipTarget = null;
+            item.equipProgress = 0;
+            SetRing(item, null, 0);
+        }
     }
 
     public void RegisterTarget(ImageTargetBehaviour target)
@@ -274,7 +298,7 @@ public class CardWeaponManager : MonoBehaviour
             bool visible = weapon.lastTrackedTime >= 0f && now - weapon.lastTrackedTime <= lostTrackingGraceTime;
             weapon.visible = visible;
             // An equipped weapon lives in the player's hand, not on its card
-            bool showModel = !SetupInProgress && visible && (weapon.isPlayer || weapon.equippedTo == null);
+            bool showModel = !SetupInProgress && visible && (weapon.isPlayer || (weapon.equippedTo == null && !Duel.IsUsed(image.TargetName)));
             if (!showModel)
             {
                 if (weapon.instance.activeSelf)
@@ -338,8 +362,13 @@ public class CardWeaponManager : MonoBehaviour
 
         foreach (var weapon in spawnedWeapons.Values)
         {
-            if (weapon.isPlayer)
+            if (weapon.isPlayer) continue;
+            int owner = weapon.image != null && weapon.image.TargetName.EndsWith("2") ? 1 : 0;
+            if (weapon.image == null || !Duel.CanEquip(owner, weapon.image.TargetName))
             {
+                weapon.equipTarget = null;
+                weapon.equipProgress = 0;
+                SetRing(weapon, null, 0);
                 continue;
             }
 
@@ -349,7 +378,7 @@ public class CardWeaponManager : MonoBehaviour
                 float best = float.MaxValue;
                 foreach (var player in spawnedWeapons.Values)
                 {
-                    if (!player.isPlayer || !player.visible || player.avatar == null || player.image == null)
+                    if (!player.isPlayer || !player.visible || player.avatar == null || player.image == null || player.avatar.playerIndex != owner)
                     {
                         continue;
                     }
@@ -397,6 +426,8 @@ public class CardWeaponManager : MonoBehaviour
 
     private void Equip(SpawnedWeapon weapon, SpawnedWeapon player)
     {
+        var weaponStats = weapon.prefab.GetComponent<WeaponStats>();
+        if (!Duel.Equip(player.avatar.playerIndex, weapon.image.TargetName, weaponStats)) return;
         // The weapon leaves its previous owner
         if (weapon.equippedTo != null && weapon.equippedTo.avatar != null)
         {
@@ -465,7 +496,7 @@ public class CardWeaponManager : MonoBehaviour
 
     void OnGUI()
     {
-        if (SetupInProgress || !showDebugInfo)
+        if (Duel != null || SetupInProgress || !showDebugInfo)
         {
             return;
         }

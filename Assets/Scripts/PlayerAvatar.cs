@@ -70,9 +70,14 @@ public class PlayerAvatar : MonoBehaviour
     private Transform faceRoot;
     private TextMesh label;
     private Camera mainCamera;
+    private DuelController duel;
+    private Transform healthFill;
+    private SpriteRenderer healthFillRenderer;
+    private static Sprite healthSprite;
 
     void Start()
     {
+        duel = FindAnyObjectByType<DuelController>();
         armorRoot = transform.Find("ARMOR PARTS");
         faceRoot = transform.Find("FACE DETAILS PARTS");
         if (showNameLabel) CreateLabel();
@@ -189,6 +194,18 @@ public class PlayerAvatar : MonoBehaviour
         }
     }
 
+    public void ResetCombat()
+    {
+        LastAttack = null;
+        attackSpeed = 1;
+        var animator = GetComponent<Animator>();
+        if (animator != null && animator.runtimeAnimatorController != null)
+        {
+            animator.Rebind();
+            animator.Update(0);
+        }
+    }
+
     private static Transform FindDeep(Transform parent, string name)
     {
         foreach (Transform child in parent)
@@ -235,6 +252,24 @@ public class PlayerAvatar : MonoBehaviour
         label.anchor = TextAnchor.LowerCenter;
         label.alignment = TextAlignment.Center;
         label.color = labelColor;
+        if (duel != null)
+        {
+            if (healthSprite == null)
+                healthSprite = Sprite.Create(Texture2D.whiteTexture, new Rect(0, 0, 1, 1), new Vector2(0.5f, 0.5f), 1);
+            var background = new GameObject("Health Bar");
+            background.transform.SetParent(label.transform, false);
+            background.transform.localPosition = new Vector3(0, -0.1f, 0);
+            background.transform.localScale = new Vector3(0.9f, 0.055f, 1);
+            var backgroundRenderer = background.AddComponent<SpriteRenderer>();
+            backgroundRenderer.sprite = healthSprite;
+            backgroundRenderer.color = new Color(0.3f, 0.08f, 0.08f);
+            var fill = new GameObject("Health Fill");
+            fill.transform.SetParent(background.transform, false);
+            healthFill = fill.transform;
+            healthFillRenderer = fill.AddComponent<SpriteRenderer>();
+            healthFillRenderer.sprite = healthSprite;
+            healthFillRenderer.sortingOrder = 1;
+        }
     }
 
     void LateUpdate()
@@ -249,6 +284,20 @@ public class PlayerAvatar : MonoBehaviour
             if (mainCamera == null)
             {
                 return;
+            }
+        }
+
+        if (duel != null && duel.Match != null && PlayerProfiles.Instance != null)
+        {
+            int hp = duel.Match.Health(playerIndex);
+            label.text = PlayerProfiles.Instance.Get(playerIndex).name + $"\n{hp} / 100 HP";
+            label.color = hp <= 25 ? Color.red : labelColor;
+            if (healthFill != null)
+            {
+                float fraction = hp / 100f;
+                healthFill.localScale = new Vector3(fraction, 1, 1);
+                healthFill.localPosition = new Vector3((fraction - 1) * 0.5f, 0, -0.01f);
+                healthFillRenderer.color = hp <= 25 ? Color.red : Color.green;
             }
         }
 
