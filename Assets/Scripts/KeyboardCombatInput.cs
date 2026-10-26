@@ -54,6 +54,7 @@ public class KeyboardCombatInput : MonoBehaviour
 
     void OnGUI()
     {
+        if (manager == null || manager.SetupInProgress) return;
         var style = new GUIStyle(GUI.skin.box) { fontSize = Mathf.Max(14, Screen.height / 60), alignment = TextAnchor.UpperLeft };
         GUI.Box(new Rect(Screen.width - 360, 12, 348, 110),
             $"Teclado - Jogador {playerIndex + 1} (1/2)\nSetas: atacar\nShift+setas: defender\nK: morrer   R: Idle", style);

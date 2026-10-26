@@ -9,9 +9,19 @@ public class PlayerSetupUI : MonoBehaviour
 {
     // Used to know how many options each armor category has
     public GameObject playerPrefab;
-    public bool openOnStart = true;
+    public bool IsComplete { get; private set; }
+    private CardWeaponManager manager;
+    private Text scanPrompt;
+    private Text title;
+    private GameObject previewRoot;
+    private PlayerAvatar previewAvatar;
+    private Camera previewCamera;
+    private RenderTexture previewTexture;
+    private Camera worldCamera;
+    private int worldCameraMask;
+    private const int PreviewLayer = 31;
 
-    private static readonly string[] CategoryLabels = { "Capacete", "Peito", "Braços", "Cinto", "Pernas", "Pés" };
+    private static readonly string[] CategoryLabels = { "Helmet", "Chest", "Arms", "Belt", "Legs", "Feet" };
 
     private PlayerProfiles profiles;
     private Font font;
@@ -22,19 +32,18 @@ public class PlayerSetupUI : MonoBehaviour
     private InputField nameField;
     private Text[] optionTexts;
     private Text helmetText;
-    private Image[] tabImages;
 
-    private static readonly Color PanelColor = new Color(0f, 0f, 0f, 0.75f);
+
     private static readonly Color ButtonColor = new Color(0.22f, 0.22f, 0.22f, 1f);
     private static readonly Color SelectedColor = new Color(0.85f, 0.65f, 0.1f, 1f);
 
     void Start()
     {
         profiles = GetComponent<PlayerProfiles>();
+        manager = FindFirstObjectByType<CardWeaponManager>();
         font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         if (playerPrefab == null)
         {
-            var manager = FindFirstObjectByType<CardWeaponManager>();
             if (manager != null)
             {
                 playerPrefab = manager.playerPrefab;
@@ -44,8 +53,7 @@ public class PlayerSetupUI : MonoBehaviour
 
         EnsureEventSystem();
         BuildUI();
-        panel.SetActive(openOnStart);
-        SelectPlayer(0);
+        WaitForPlayer(0);
     }
 
     private int[] CountOptions()
@@ -85,33 +93,39 @@ public class PlayerSetupUI : MonoBehaviour
         scaler.matchWidthOrHeight = 0.5f;
         Transform root = canvasObject.transform;
 
-        // Button that opens/closes the panel
-        var toggle = CreateButton(root, "Personalizar", () => panel.SetActive(!panel.activeSelf));
-        SetRect(toggle.transform, new Vector2(1, 1), new Vector2(1, 1), new Vector2(-30, -30), new Vector2(330, 110), new Vector2(1, 1));
+        scanPrompt = CreateText(root, "", 52, TextAnchor.MiddleCenter);
+        SetRect(scanPrompt.transform, new Vector2(0, 0.4f), new Vector2(1, 0.6f), Vector2.zero, Vector2.zero, new Vector2(0.5f, 0.5f));
+        scanPrompt.raycastTarget = false;
 
-        // Panel at the bottom of the screen
-        panel = CreateImage(root, "Panel", PanelColor).gameObject;
-        SetRect(panel.transform, new Vector2(0, 0), new Vector2(1, 0), Vector2.zero, new Vector2(0, 1150), new Vector2(0.5f, 0));
-        var layout = panel.AddComponent<VerticalLayoutGroup>();
-        layout.padding = new RectOffset(40, 40, 30, 30);
-        layout.spacing = 18;
+        panel = CreateImage(root, "Customization", new Color(0.045f, 0.055f, 0.08f, 1f)).gameObject;
+        Stretch((RectTransform)panel.transform);
+
+        var viewport = new GameObject("Preview Area", typeof(RectTransform));
+        viewport.transform.SetParent(panel.transform, false);
+        SetRect(viewport.transform, new Vector2(0.5f, 0.08f), new Vector2(1, 0.92f), Vector2.zero, Vector2.zero, new Vector2(0.5f, 0.5f));
+        var preview = new GameObject("Character Preview", typeof(RectTransform), typeof(RawImage), typeof(AspectRatioFitter));
+        preview.transform.SetParent(viewport.transform, false);
+        var aspect = preview.GetComponent<AspectRatioFitter>();
+        aspect.aspectMode = AspectRatioFitter.AspectMode.FitInParent;
+        aspect.aspectRatio = 768f / 1280f;
+        preview.GetComponent<RawImage>().raycastTarget = false;
+        BuildPreview(preview.GetComponent<RawImage>());
+
+        var controls = new GameObject("Controls", typeof(RectTransform));
+        controls.transform.SetParent(panel.transform, false);
+        SetRect(controls.transform, new Vector2(0, 0), new Vector2(0.5f, 1), Vector2.zero, Vector2.zero, new Vector2(0.5f, 0.5f));
+        var layout = controls.AddComponent<VerticalLayoutGroup>();
+        layout.padding = new RectOffset(24, 24, 30, 30);
+        layout.spacing = 14;
         layout.childControlHeight = true;
         layout.childControlWidth = true;
-        layout.childForceExpandHeight = false;
-
-        // Player tabs
-        var tabs = CreateRow(panel.transform);
-        tabImages = new Image[profiles.players.Length];
-        for (int i = 0; i < profiles.players.Length; i++)
-        {
-            int index = i;
-            var tab = CreateButton(tabs, $"Jogador {i + 1}", () => SelectPlayer(index));
-            tabImages[i] = tab.GetComponent<Image>();
-        }
+        layout.childForceExpandHeight = true;
+        Transform content = controls.transform;
+        title = CreateText(CreateRow(content), "", 40, TextAnchor.MiddleCenter);
 
         // Name
-        var nameRow = CreateRow(panel.transform);
-        CreateText(nameRow, "Nome", 44, TextAnchor.MiddleLeft, 220);
+        var nameRow = CreateRow(content);
+        CreateText(nameRow, "Name", 32, TextAnchor.MiddleLeft, 115);
         nameField = CreateInputField(nameRow);
         nameField.onEndEdit.AddListener(OnNameChanged);
 
@@ -120,22 +134,22 @@ public class PlayerSetupUI : MonoBehaviour
         for (int c = 0; c < CategoryLabels.Length; c++)
         {
             int category = c;
-            var row = CreateRow(panel.transform);
-            CreateText(row, CategoryLabels[c], 44, TextAnchor.MiddleLeft, 220);
-            CreateButton(row, "<", () => ChangeArmor(category, -1), 140);
-            optionTexts[c] = CreateText(row, "", 44, TextAnchor.MiddleCenter);
-            CreateButton(row, ">", () => ChangeArmor(category, 1), 140);
+            var row = CreateRow(content);
+            CreateText(row, CategoryLabels[c], 30, TextAnchor.MiddleLeft, 115);
+            CreateButton(row, "<", () => ChangeArmor(category, -1), 60);
+            optionTexts[c] = CreateText(row, "", 30, TextAnchor.MiddleCenter);
+            CreateButton(row, ">", () => ChangeArmor(category, 1), 60);
         }
 
         // Helmet toggle
-        var helmetRow = CreateRow(panel.transform);
+        var helmetRow = CreateRow(content);
         var helmetButton = CreateButton(helmetRow, "", ToggleHelmet);
         helmetText = helmetButton.GetComponentInChildren<Text>();
 
         // Actions
-        var actions = CreateRow(panel.transform);
-        CreateButton(actions, "Aleatório", Randomize);
-        var done = CreateButton(actions, "Pronto", () => panel.SetActive(false));
+        var actions = CreateRow(content);
+        CreateButton(actions, "Randomize", Randomize);
+        var done = CreateButton(actions, "OK", ConfirmPlayer);
         done.GetComponent<Image>().color = SelectedColor;
     }
 
@@ -144,12 +158,14 @@ public class PlayerSetupUI : MonoBehaviour
         var row = new GameObject("Row", typeof(RectTransform));
         row.transform.SetParent(parent, false);
         var layout = row.AddComponent<HorizontalLayoutGroup>();
-        layout.spacing = 16;
+        layout.spacing = 8;
         layout.childControlHeight = true;
         layout.childControlWidth = true;
         layout.childForceExpandWidth = true;
         var element = row.AddComponent<LayoutElement>();
-        element.preferredHeight = 110;
+        element.preferredHeight = 90;
+        element.flexibleHeight = 1;
+        element.minHeight = 32;
         return row.GetComponent<RectTransform>();
     }
 
@@ -186,7 +202,7 @@ public class PlayerSetupUI : MonoBehaviour
         var image = CreateImage(parent, "Button", ButtonColor);
         var button = image.gameObject.AddComponent<Button>();
         button.onClick.AddListener(onClick);
-        var text = CreateText(image.transform, content, 44, TextAnchor.MiddleCenter);
+        var text = CreateText(image.transform, content, 30, TextAnchor.MiddleCenter);
         Stretch(text.rectTransform);
         if (width > 0)
         {
@@ -201,7 +217,7 @@ public class PlayerSetupUI : MonoBehaviour
     {
         var image = CreateImage(parent, "Name Input", Color.white);
         var input = image.gameObject.AddComponent<InputField>();
-        var text = CreateText(image.transform, "", 44, TextAnchor.MiddleLeft);
+        var text = CreateText(image.transform, "", 30, TextAnchor.MiddleLeft);
         text.color = Color.black;
         text.supportRichText = false;
         Stretch(text.rectTransform, 20);
@@ -230,14 +246,104 @@ public class PlayerSetupUI : MonoBehaviour
 
     // ---------- Behaviour ----------
 
-    private void SelectPlayer(int index)
+    void Update()
+    {
+        if (!IsComplete && !panel.activeSelf && previewAvatar != null && manager != null && manager.IsPlayerTracked(currentPlayer))
+        {
+            scanPrompt.gameObject.SetActive(false);
+            panel.SetActive(true);
+            previewAvatar.playerIndex = currentPlayer;
+            previewRoot.SetActive(true);
+            previewAvatar.Apply();
+            previewCamera.gameObject.SetActive(true);
+            title.text = $"Customize Player {currentPlayer + 1}";
+            Refresh();
+        }
+    }
+
+    private void WaitForPlayer(int index)
     {
         currentPlayer = index;
-        for (int i = 0; i < tabImages.Length; i++)
+        panel.SetActive(false);
+        if (previewRoot != null) previewRoot.SetActive(false);
+        if (previewCamera != null) previewCamera.gameObject.SetActive(false);
+        scanPrompt.text = $"Please scan the PLAYER {index + 1} card.";
+        scanPrompt.gameObject.SetActive(true);
+    }
+
+    private void ConfirmPlayer()
+    {
+        OnNameChanged(nameField.text);
+        if (currentPlayer == 0)
         {
-            tabImages[i].color = i == index ? SelectedColor : ButtonColor;
+            WaitForPlayer(1);
+            return;
         }
-        Refresh();
+        panel.SetActive(false);
+        previewRoot.SetActive(false);
+        previewCamera.gameObject.SetActive(false);
+        scanPrompt.gameObject.SetActive(false);
+        IsComplete = true;
+    }
+
+    private void BuildPreview(RawImage image)
+    {
+        if (playerPrefab == null)
+        {
+            Debug.LogError("Player setup requires a character prefab.", this);
+            return;
+        }
+        previewRoot = Instantiate(playerPrefab, new Vector3(10000, 10000, 10000), Quaternion.Euler(0, 180, 0));
+        previewRoot.name = "Setup Character Preview";
+        previewRoot.SetActive(true);
+        foreach (Transform child in previewRoot.GetComponentsInChildren<Transform>(true))
+            child.gameObject.layer = PreviewLayer;
+        previewAvatar = previewRoot.GetComponent<PlayerAvatar>();
+        if (previewAvatar == null) previewAvatar = previewRoot.AddComponent<PlayerAvatar>();
+        previewAvatar.showNameLabel = false;
+        previewAvatar.animatorController = manager != null ? manager.playerAnimator : null;
+
+        var renderers = previewRoot.GetComponentsInChildren<Renderer>();
+        Bounds bounds = new Bounds(previewRoot.transform.position + Vector3.up, new Vector3(1, 2, 1));
+        if (renderers.Length > 0)
+        {
+            bounds = renderers[0].bounds;
+            foreach (var renderer in renderers) bounds.Encapsulate(renderer.bounds);
+        }
+        previewTexture = new RenderTexture(768, 1280, 24);
+        previewTexture.Create();
+        image.texture = previewTexture;
+        var cameraObject = new GameObject("Setup Preview Camera", typeof(Camera));
+        cameraObject.transform.SetParent(transform, false);
+        previewCamera = cameraObject.GetComponent<Camera>();
+        previewCamera.cullingMask = 1 << PreviewLayer;
+        previewCamera.clearFlags = CameraClearFlags.SolidColor;
+        previewCamera.backgroundColor = new Color(0.045f, 0.055f, 0.08f, 1f);
+        previewCamera.targetTexture = previewTexture;
+        previewCamera.orthographic = true;
+        previewCamera.orthographicSize = Mathf.Max(bounds.extents.y, bounds.extents.x / previewCamera.aspect) * 1.2f;
+        previewCamera.nearClipPlane = 0.01f;
+        previewCamera.farClipPlane = Mathf.Max(20, bounds.size.z * 4);
+        cameraObject.transform.position = bounds.center - Vector3.forward * (bounds.extents.z + 5);
+        cameraObject.transform.rotation = Quaternion.identity;
+        worldCamera = Camera.main;
+        if (worldCamera != null)
+        {
+            worldCameraMask = worldCamera.cullingMask;
+            worldCamera.cullingMask &= ~(1 << PreviewLayer);
+        }
+    }
+
+    void OnDestroy()
+    {
+        if (worldCamera != null) worldCamera.cullingMask = worldCameraMask;
+        if (previewCamera != null) Destroy(previewCamera.gameObject);
+        if (previewRoot != null) Destroy(previewRoot);
+        if (previewTexture != null)
+        {
+            previewTexture.Release();
+            Destroy(previewTexture);
+        }
     }
 
     private void Refresh()
@@ -248,7 +354,7 @@ public class PlayerSetupUI : MonoBehaviour
         {
             optionTexts[c].text = $"{Wrap(profile.armor[c], optionCounts[c]) + 1} / {optionCounts[c]}";
         }
-        helmetText.text = profile.showHelmet ? "Capacete: Sim" : "Capacete: Não";
+        helmetText.text = profile.showHelmet ? "Helmet: On" : "Helmet: Off";
     }
 
     private static int Wrap(int value, int count)
@@ -259,7 +365,7 @@ public class PlayerSetupUI : MonoBehaviour
     private void OnNameChanged(string value)
     {
         var profile = profiles.Get(currentPlayer);
-        profile.name = string.IsNullOrWhiteSpace(value) ? $"Jogador {currentPlayer + 1}" : value.Trim();
+        profile.name = string.IsNullOrWhiteSpace(value) ? $"Player {currentPlayer + 1}" : value.Trim();
         profiles.NotifyChanged(currentPlayer);
         Refresh();
     }

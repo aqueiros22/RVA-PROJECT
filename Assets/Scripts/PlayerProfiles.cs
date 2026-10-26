@@ -19,8 +19,8 @@ public class PlayerProfiles : MonoBehaviour
 
     public Profile[] players =
     {
-        new Profile { name = "Jogador 1", armor = new[] { 0, 0, 0, 0, 0, 0 } },
-        new Profile { name = "Jogador 2", armor = new[] { 1, 1, 1, 1, 1, 1 } }
+        new Profile { name = "Player 1", armor = new[] { 0, 0, 0, 0, 0, 0 } },
+        new Profile { name = "Player 2", armor = new[] { 1, 1, 1, 1, 1, 1 } }
     };
 
     public event Action<int> changed;

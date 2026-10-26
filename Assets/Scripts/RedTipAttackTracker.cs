@@ -207,7 +207,7 @@ public class RedTipAttackTracker : MonoBehaviour
 
     void OnGUI()
     {
-        if (!showOverlay) return;
+        if (!showOverlay || manager == null || manager.SetupInProgress) return;
         float scale = Mathf.Max(1f, Screen.height / 900f);
         var style = new GUIStyle(GUI.skin.box) { fontSize = Mathf.RoundToInt(18 * scale), alignment = TextAnchor.MiddleLeft };
         float h = 40 * scale;

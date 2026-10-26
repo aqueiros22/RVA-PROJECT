@@ -4,6 +4,7 @@ using UnityEngine;
 public class PlayerAvatar : MonoBehaviour
 {
     public int playerIndex;
+    public bool showNameLabel = true;
     // Label height in the character's local units (the model is about 2 units tall)
     public float labelHeight = 2.3f;
     public Color labelColor = Color.yellow;
@@ -74,7 +75,7 @@ public class PlayerAvatar : MonoBehaviour
     {
         armorRoot = transform.Find("ARMOR PARTS");
         faceRoot = transform.Find("FACE DETAILS PARTS");
-        CreateLabel();
+        if (showNameLabel) CreateLabel();
 
         var animator = GetComponent<Animator>();
         if (animator != null && animatorController != null)

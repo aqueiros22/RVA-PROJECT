@@ -86,15 +86,36 @@ public class CardWeaponManager : MonoBehaviour
     private readonly Dictionary<int, SpawnedWeapon> spawnedWeapons = new Dictionary<int, SpawnedWeapon>();
     private readonly Dictionary<GameObject, float> prefabHeights = new Dictionary<GameObject, float>();
 
+    private PlayerSetupUI playerSetup;
+
     void Awake()
     {
+        playerSetup = FindAnyObjectByType<PlayerSetupUI>();
         // Shares the Vuforia camera with the red tip tracker.
         if (GetComponent<RedTipAttackTracker>() == null)
             gameObject.AddComponent<RedTipAttackTracker>();
     }
 
+    public bool SetupInProgress
+    {
+        get
+        {
+            return playerSetup != null && playerSetup.isActiveAndEnabled && !playerSetup.IsComplete;
+        }
+    }
+
+    public bool IsPlayerTracked(int playerIndex)
+    {
+        foreach (var player in spawnedWeapons.Values)
+            if (player.isPlayer && player.avatar != null && player.avatar.playerIndex == playerIndex &&
+                player.image != null && player.image.TargetStatus.Status == Status.TRACKED)
+                return true;
+        return false;
+    }
+
     public PlayerAvatar GetAttackPlayer(int playerIndex)
     {
+        if (SetupInProgress) return null;
         foreach (var player in spawnedWeapons.Values)
             if (player.isPlayer && player.visible && player.avatar != null &&
                 player.avatar.isActiveAndEnabled && player.avatar.playerIndex == playerIndex && player.avatar.HasWeapon)
@@ -105,6 +126,7 @@ public class CardWeaponManager : MonoBehaviour
     // A visible player, with or without a weapon
     public PlayerAvatar GetPlayer(int playerIndex)
     {
+        if (SetupInProgress) return null;
         foreach (var player in spawnedWeapons.Values)
             if (player.isPlayer && player.visible && player.avatar != null &&
                 player.avatar.isActiveAndEnabled && player.avatar.playerIndex == playerIndex)
@@ -252,7 +274,7 @@ public class CardWeaponManager : MonoBehaviour
             bool visible = weapon.lastTrackedTime >= 0f && now - weapon.lastTrackedTime <= lostTrackingGraceTime;
             weapon.visible = visible;
             // An equipped weapon lives in the player's hand, not on its card
-            bool showModel = visible && (weapon.isPlayer || weapon.equippedTo == null);
+            bool showModel = !SetupInProgress && visible && (weapon.isPlayer || weapon.equippedTo == null);
             if (!showModel)
             {
                 if (weapon.instance.activeSelf)
@@ -301,7 +323,7 @@ public class CardWeaponManager : MonoBehaviour
             t.localScale = Vector3.Lerp(t.localScale, Vector3.one * targetScale, 1f - Mathf.Exp(-scaleSmoothing * dt));
         }
 
-        UpdateEquipping();
+        if (!SetupInProgress) UpdateEquipping();
     }
 
     private static float CardSize(ImageTargetBehaviour image)
@@ -443,7 +465,7 @@ public class CardWeaponManager : MonoBehaviour
 
     void OnGUI()
     {
-        if (!showDebugInfo)
+        if (SetupInProgress || !showDebugInfo)
         {
             return;
         }
