@@ -70,9 +70,9 @@ public class CardWeaponManager : MonoBehaviour
 
     void Awake()
     {
-        // Shares the Vuforia camera with the red tip tracker.
-        if (GetComponent<RedTipAttackTracker>() == null)
-            gameObject.AddComponent<RedTipAttackTracker>();
+        // Shares the camera feed with the gesture tracker.
+        if (GetComponent<ColorGestureTracker>() == null)
+            gameObject.AddComponent<ColorGestureTracker>();
     }
 
     public PlayerAvatar GetAttackPlayer(int playerIndex)
@@ -392,7 +392,7 @@ public class CardWeaponManager : MonoBehaviour
         }
 
         var lines = new System.Text.StringBuilder();
-        lines.AppendLine("Vuforia - cartoes: " + spawnedWeapons.Count);
+        lines.AppendLine("Vuforia - cards: " + spawnedWeapons.Count);
         foreach (var weapon in spawnedWeapons.Values)
         {
             var image = weapon.image;

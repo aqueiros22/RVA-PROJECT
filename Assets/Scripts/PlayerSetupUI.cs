@@ -11,7 +11,8 @@ public class PlayerSetupUI : MonoBehaviour
     public GameObject playerPrefab;
     public bool openOnStart = true;
 
-    private static readonly string[] CategoryLabels = { "Capacete", "Peito", "Braços", "Cinto", "Pernas", "Pés" };
+    private static readonly string[] CategoryLabelsEN = { "Helmet", "Chest", "Arms", "Belt", "Legs", "Boots" };
+    private static readonly string[] CategoryLabelsPT = { "Capacete", "Peito", "Braços", "Cinto", "Pernas", "Pés" };
 
     private PlayerProfiles profiles;
     private Font font;
@@ -23,6 +24,11 @@ public class PlayerSetupUI : MonoBehaviour
     private Text[] optionTexts;
     private Text helmetText;
     private Image[] tabImages;
+    private Text[] tabTexts;
+    private Text nameLabelText;
+    private Text[] categoryLabelTexts;
+    private Text randomizeText;
+    private Text doneText;
 
     private static readonly Color PanelColor = new Color(0f, 0f, 0f, 0.75f);
     private static readonly Color ButtonColor = new Color(0.22f, 0.22f, 0.22f, 1f);
@@ -46,7 +52,23 @@ public class PlayerSetupUI : MonoBehaviour
         BuildUI();
         panel.SetActive(openOnStart);
         SelectPlayer(0);
+
+        Localization.OnLanguageChanged += UpdateLanguageTexts;
+        UpdateLanguageTexts();
     }
+
+    void OnDestroy()
+    {
+        Localization.OnLanguageChanged -= UpdateLanguageTexts;
+    }
+
+    public void TogglePanel()
+    {
+        if (panel != null)
+            panel.SetActive(!panel.activeSelf);
+    }
+
+    public bool IsPanelOpen => panel != null && panel.activeSelf;
 
     private int[] CountOptions()
     {
@@ -85,10 +107,6 @@ public class PlayerSetupUI : MonoBehaviour
         scaler.matchWidthOrHeight = 0.5f;
         Transform root = canvasObject.transform;
 
-        // Button that opens/closes the panel
-        var toggle = CreateButton(root, "Personalizar", () => panel.SetActive(!panel.activeSelf));
-        SetRect(toggle.transform, new Vector2(1, 1), new Vector2(1, 1), new Vector2(-30, -30), new Vector2(330, 110), new Vector2(1, 1));
-
         // Panel at the bottom of the screen
         panel = CreateImage(root, "Panel", PanelColor).gameObject;
         SetRect(panel.transform, new Vector2(0, 0), new Vector2(1, 0), Vector2.zero, new Vector2(0, 1150), new Vector2(0.5f, 0));
@@ -102,26 +120,29 @@ public class PlayerSetupUI : MonoBehaviour
         // Player tabs
         var tabs = CreateRow(panel.transform);
         tabImages = new Image[profiles.players.Length];
+        tabTexts = new Text[profiles.players.Length];
         for (int i = 0; i < profiles.players.Length; i++)
         {
             int index = i;
-            var tab = CreateButton(tabs, $"Jogador {i + 1}", () => SelectPlayer(index));
+            var tab = CreateButton(tabs, Localization.Get($"Player {i + 1}", $"Jogador {i + 1}"), () => SelectPlayer(index));
             tabImages[i] = tab.GetComponent<Image>();
+            tabTexts[i] = tab.GetComponentInChildren<Text>();
         }
 
         // Name
         var nameRow = CreateRow(panel.transform);
-        CreateText(nameRow, "Nome", 44, TextAnchor.MiddleLeft, 220);
+        nameLabelText = CreateText(nameRow, Localization.Get("Name", "Nome"), 44, TextAnchor.MiddleLeft, 220);
         nameField = CreateInputField(nameRow);
         nameField.onEndEdit.AddListener(OnNameChanged);
 
         // Armor categories
-        optionTexts = new Text[CategoryLabels.Length];
-        for (int c = 0; c < CategoryLabels.Length; c++)
+        optionTexts = new Text[CategoryLabelsEN.Length];
+        categoryLabelTexts = new Text[CategoryLabelsEN.Length];
+        for (int c = 0; c < CategoryLabelsEN.Length; c++)
         {
             int category = c;
             var row = CreateRow(panel.transform);
-            CreateText(row, CategoryLabels[c], 44, TextAnchor.MiddleLeft, 220);
+            categoryLabelTexts[c] = CreateText(row, Localization.CurrentLanguage == GameLanguage.Portuguese ? CategoryLabelsPT[c] : CategoryLabelsEN[c], 44, TextAnchor.MiddleLeft, 220);
             CreateButton(row, "<", () => ChangeArmor(category, -1), 140);
             optionTexts[c] = CreateText(row, "", 44, TextAnchor.MiddleCenter);
             CreateButton(row, ">", () => ChangeArmor(category, 1), 140);
@@ -134,9 +155,43 @@ public class PlayerSetupUI : MonoBehaviour
 
         // Actions
         var actions = CreateRow(panel.transform);
-        CreateButton(actions, "Aleatório", Randomize);
-        var done = CreateButton(actions, "Pronto", () => panel.SetActive(false));
+        var randBtn = CreateButton(actions, Localization.Get("Randomize", "Aleatório"), Randomize);
+        randomizeText = randBtn.GetComponentInChildren<Text>();
+        var done = CreateButton(actions, Localization.Get("Done", "Pronto"), () => panel.SetActive(false));
+        doneText = done.GetComponentInChildren<Text>();
         done.GetComponent<Image>().color = SelectedColor;
+    }
+
+    private void UpdateLanguageTexts()
+    {
+        if (tabTexts != null)
+        {
+            for (int i = 0; i < tabTexts.Length; i++)
+            {
+                if (tabTexts[i] != null)
+                    tabTexts[i].text = Localization.Get($"Player {i + 1}", $"Jogador {i + 1}");
+            }
+        }
+
+        if (nameLabelText != null)
+            nameLabelText.text = Localization.Get("Name", "Nome");
+
+        if (categoryLabelTexts != null)
+        {
+            for (int c = 0; c < categoryLabelTexts.Length; c++)
+            {
+                if (categoryLabelTexts[c] != null)
+                    categoryLabelTexts[c].text = Localization.CurrentLanguage == GameLanguage.Portuguese ? CategoryLabelsPT[c] : CategoryLabelsEN[c];
+            }
+        }
+
+        if (randomizeText != null)
+            randomizeText.text = Localization.Get("Randomize", "Aleatório");
+
+        if (doneText != null)
+            doneText.text = Localization.Get("Done", "Pronto");
+
+        Refresh();
     }
 
     private RectTransform CreateRow(Transform parent)
@@ -248,7 +303,7 @@ public class PlayerSetupUI : MonoBehaviour
         {
             optionTexts[c].text = $"{Wrap(profile.armor[c], optionCounts[c]) + 1} / {optionCounts[c]}";
         }
-        helmetText.text = profile.showHelmet ? "Capacete: Sim" : "Capacete: Não";
+        helmetText.text = profile.showHelmet ? Localization.Get("Helmet: Yes", "Capacete: Sim") : Localization.Get("Helmet: No", "Capacete: Não");
     }
 
     private static int Wrap(int value, int count)
@@ -259,7 +314,7 @@ public class PlayerSetupUI : MonoBehaviour
     private void OnNameChanged(string value)
     {
         var profile = profiles.Get(currentPlayer);
-        profile.name = string.IsNullOrWhiteSpace(value) ? $"Jogador {currentPlayer + 1}" : value.Trim();
+        profile.name = string.IsNullOrWhiteSpace(value) ? Localization.Get($"Player {currentPlayer + 1}", $"Jogador {currentPlayer + 1}") : value.Trim();
         profiles.NotifyChanged(currentPlayer);
         Refresh();
     }

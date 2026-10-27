@@ -13,6 +13,11 @@ public class VuforiaArenaSetup : MonoBehaviour
 
     void Awake()
     {
+#if UNITY_EDITOR_LINUX
+        Debug.LogWarning("VuforiaEngine is not supported on Linux Editor. Running in WebCam fallback mode.");
+        enabled = false;
+        return;
+#endif
         var config = VuforiaConfiguration.Instance;
         config.Vuforia.MaxSimultaneousImageTargets = 4;
         config.DeviceTracker.ARCoreRequirementSetting = VuforiaConfiguration.DeviceTrackerConfiguration.ARCoreRequirement.DONT_USE;

@@ -1379,7 +1379,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 129f02c13bfd49d1b1973a7ae903bbc9, type: 3}
   m_Name:
-  m_EditorClassIdentifier: Assembly-CSharp::RedTipAttackTracker
+  m_EditorClassIdentifier: Assembly-CSharp::ColorGestureTracker
   playerIndex: 0
   trackingEnabled: 1
   showOverlay: 1
@@ -1390,10 +1390,14 @@ MonoBehaviour:
   minimumBlobPixels: 5
   maximumBlobFraction: 0.08
   flipCameraY: 0
-  gestureDistance: 0.12
-  gestureWindow: 0.45
-  attackCooldown: 0.65
-  axisDominance: 1.3
+  gestureDistance: 0.22
+  gestureWindow: 0.16
+  minSwipeSpeed: 2
+  axisDominance: 1.6
+  attackCooldown: 0.5
+  appearanceSettlingTime: 0.4
+  showMarker: 1
+  enableMotionTrail: 1
 --- !u!1 &1871728372
 GameObject:
   m_ObjectHideFlags: 0
