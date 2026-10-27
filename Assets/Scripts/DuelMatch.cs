@@ -3,7 +3,9 @@ using System.Collections.Generic;
 
 public enum WeaponClass { Light, Heavy, Defense }
 public enum AttackDirection { Up, Down, Left, Right }
-public enum DuelPhase { Pick, Defense, DefenseChosen, Attack, Result, GameOver }
+public enum GestureSlot { Attack, Defense }
+// Pick weapons -> the players take turns recording in secret (A attack, B defense, B attack, A defense) -> FIGHT -> clash -> result
+public enum DuelPhase { Pick, Record, Fight, Clash, Result, GameOver }
 
 // Pure rules: tracking, UI and animation cannot change the turn order or damage.
 public sealed class DuelMatch
@@ -20,24 +22,46 @@ public sealed class DuelMatch
         }
     }
 
+    // One attack of the clash, already resolved
+    public sealed class Exchange
+    {
+        public readonly int attacker;
+        public readonly AttackDirection direction;
+        public readonly AttackDirection defense;
+        public readonly bool blocked;
+        public readonly int damage;
+        public readonly int defenderHealth;
+        public int Defender => 1 - attacker;
+        public Exchange(int attacker, AttackDirection direction, AttackDirection defense, bool blocked, int damage, int defenderHealth)
+        {
+            this.attacker = attacker; this.direction = direction; this.defense = defense;
+            this.blocked = blocked; this.damage = damage; this.defenderHealth = defenderHealth;
+        }
+    }
+
     private readonly int[] health = { 100, 100 };
     private readonly int[] blocks = { 0, 0 };
     private readonly Card[] cards = new Card[2];
     private readonly HashSet<string> used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-    private AttackDirection defense;
-    private int attacks;
+    // [player, slot]: the round's secret gestures
+    private readonly AttackDirection?[,] gestures = new AttackDirection?[2, 2];
+    private readonly List<Exchange> exchanges = new List<Exchange>();
     public int Round { get; private set; } = 1;
-    public int Attacker { get; private set; }
-    public int Defender => 1 - Attacker;
-    public int InputPlayer => Phase == DuelPhase.Defense ? Defender : Attacker;
+    // Attacks first in this round's clash, and records first
+    public int FirstAttacker { get; private set; }
+    // Record phase: 0 first attacker's attack, 1 the other's defense, 2 the other's attack, 3 first attacker's defense
+    public int Step { get; private set; }
+    public const int Steps = 4;
+    public int CurrentPlayer => Step == 0 || Step == 3 ? FirstAttacker : 1 - FirstAttacker;
+    public GestureSlot CurrentSlot => Step == 0 || Step == 2 ? GestureSlot.Attack : GestureSlot.Defense;
     public DuelPhase Phase { get; private set; } = DuelPhase.Pick;
-    public int LastDamage { get; private set; }
-    public bool LastBlocked { get; private set; }
+    public IReadOnlyList<Exchange> Exchanges => exchanges;
     public int Winner { get; private set; } = -1;
     public int Health(int player) => health[player];
     public int Blocks(int player) => blocks[player];
     public Card Equipped(int player) => cards[player];
     public bool IsUsed(string id) => used.Contains(id);
+    public bool HasGesture(int player, GestureSlot slot) => gestures[player, (int)slot].HasValue;
 
     public bool CanEquip(int player, string id)
     {
@@ -52,53 +76,70 @@ public sealed class DuelMatch
         cards[player] = card;
         if (cards[0] != null && cards[1] != null)
         {
-            Attacker = FirstAttacker(Round, health[0], health[1]);
-            Phase = DuelPhase.Defense;
+            FirstAttacker = FirstAttackerOf(Round, health[0], health[1]);
+            Step = 0;
+            Phase = DuelPhase.Record;
         }
         return true;
     }
 
-    public bool Submit(int player, AttackDirection direction)
+    // Stores (or replaces, to redo) the gesture of the current step
+    public bool Record(int player, GestureSlot slot, AttackDirection direction)
     {
-        if (player != InputPlayer) return false;
-        if (Phase == DuelPhase.Defense)
-        {
-            defense = direction;
-            Phase = DuelPhase.DefenseChosen;
-            return true;
-        }
-        if (Phase != DuelPhase.Attack) return false;
-        LastBlocked = defense == direction;
-        LastDamage = CalculateDamage(cards[Attacker], cards[Defender], LastBlocked);
-        if (LastBlocked) blocks[Defender]++;
-        health[Defender] = Math.Max(0, health[Defender] - LastDamage);
-        attacks++;
-        Phase = DuelPhase.Result;
+        if (Phase != DuelPhase.Record || player != CurrentPlayer || slot != CurrentSlot) return false;
+        gestures[player, (int)slot] = direction;
         return true;
+    }
+
+    // The current gesture is confirmed: next step, or ready to fight after the last one
+    public bool ConfirmStep()
+    {
+        if (Phase != DuelPhase.Record || !HasGesture(CurrentPlayer, CurrentSlot)) return false;
+        if (Step + 1 < Steps) Step++;
+        else Phase = DuelPhase.Fight;
+        return true;
+    }
+
+    // FIGHT pressed: resolves both attacks in turn order; a KO cancels the counterattack
+    public IReadOnlyList<Exchange> Fight()
+    {
+        if (Phase != DuelPhase.Fight) return exchanges;
+        exchanges.Clear();
+        for (int i = 0; i < 2; i++)
+        {
+            int attacker = i == 0 ? FirstAttacker : 1 - FirstAttacker;
+            int defender = 1 - attacker;
+            AttackDirection direction = gestures[attacker, (int)GestureSlot.Attack].Value;
+            AttackDirection defense = gestures[defender, (int)GestureSlot.Defense].Value;
+            bool blocked = direction == defense;
+            int damage = CalculateDamage(cards[attacker], cards[defender], blocked);
+            if (blocked) blocks[defender]++;
+            health[defender] = Math.Max(0, health[defender] - damage);
+            exchanges.Add(new Exchange(attacker, direction, defense, blocked, damage, health[defender]));
+            if (health[defender] == 0) break;
+        }
+        Phase = DuelPhase.Clash;
+        return exchanges;
+    }
+
+    // The clash animation finished playing
+    public void FinishClash()
+    {
+        if (Phase == DuelPhase.Clash) Phase = DuelPhase.Result;
     }
 
     public void Continue()
     {
-        if (Phase == DuelPhase.DefenseChosen) { Phase = DuelPhase.Attack; return; }
         if (Phase != DuelPhase.Result) return;
-        if (health[0] == 0 || health[1] == 0 || (Round == 3 && attacks == 2))
+        ConsumeCards();
+        if (health[0] == 0 || health[1] == 0 || Round == 3)
         {
-            ConsumeCards();
             Winner = DecideWinner(health[0], health[1], blocks[0], blocks[1]);
             Phase = DuelPhase.GameOver;
+            return;
         }
-        else if (attacks == 1)
-        {
-            Attacker = 1 - Attacker;
-            Phase = DuelPhase.Defense;
-        }
-        else
-        {
-            ConsumeCards();
-            Round++;
-            attacks = 0;
-            Phase = DuelPhase.Pick;
-        }
+        Round++;
+        Phase = DuelPhase.Pick;
     }
 
     private void ConsumeCards()
@@ -107,10 +148,12 @@ public sealed class DuelMatch
         {
             if (cards[i] != null) used.Add(cards[i].id);
             cards[i] = null;
+            gestures[i, 0] = gestures[i, 1] = null;
         }
+        exchanges.Clear();
     }
 
-    public static int FirstAttacker(int round, int hpA, int hpB) => round == 1 ? 0 : round == 2 ? 1 : hpA < hpB ? 0 : 1;
+    public static int FirstAttackerOf(int round, int hpA, int hpB) => round == 1 ? 0 : round == 2 ? 1 : hpA < hpB ? 0 : 1;
     public static int DecideWinner(int hpA, int hpB, int blocksA, int blocksB)
     {
         if (hpA != hpB) return hpA > hpB ? 0 : 1;

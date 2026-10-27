@@ -14,23 +14,53 @@ public class PlayerAvatar : MonoBehaviour
     public event System.Action<AttackDirection> attacked;
     public AttackDirection? LastAttack { get; private set; }
 
-    public bool TryAttack(AttackDirection direction)
+    // speedScale slows the swing further (the duel clash plays attacks slower so they read on a phone)
+    public bool TryAttack(AttackDirection direction, float speedScale = 1f)
     {
         if (!HasWeapon || !isActiveAndEnabled) return false;
         LastAttack = direction;
         var animator = GetComponent<Animator>();
         if (HasParameter(animator, "AttackSpeed", AnimatorControllerParameterType.Float))
-            animator.SetFloat("AttackSpeed", attackSpeed);
+            animator.SetFloat("AttackSpeed", attackSpeed * speedScale);
         PlayTrigger("Attack" + direction);
         attacked?.Invoke(direction);
         return true;
     }
 
-    // Successful defense: vertical swings are blocked, side swings are ducked under
-    public void PlayDefense(AttackDirection attack)
+    // Successful defense, held until EndGuard: vertical swings are blocked, side swings are ducked under
+    public void StartGuard(AttackDirection attack)
     {
+        var animator = GetComponent<Animator>();
+        if (HasParameter(animator, "Guarding", AnimatorControllerParameterType.Bool))
+            animator.SetBool("Guarding", true);
         bool vertical = attack == AttackDirection.Up || attack == AttackDirection.Down;
         PlayTrigger(vertical ? "Block" : "Crouch");
+    }
+
+    public void EndGuard()
+    {
+        var animator = GetComponent<Animator>();
+        if (HasParameter(animator, "Guarding", AnimatorControllerParameterType.Bool))
+            animator.SetBool("Guarding", false);
+    }
+
+    // Progress (0-1) of the attack swing being played, or -1 when not swinging
+    public float AttackProgress()
+    {
+        var animator = GetComponent<Animator>();
+        if (animator == null || animator.runtimeAnimatorController == null) return -1f;
+        var state = animator.IsInTransition(0) ? animator.GetNextAnimatorStateInfo(0) : animator.GetCurrentAnimatorStateInfo(0);
+        foreach (AttackDirection direction in System.Enum.GetValues(typeof(AttackDirection)))
+            if (state.IsName("Attack" + direction))
+                return Mathf.Clamp01(state.normalizedTime);
+        return -1f;
+    }
+
+    // Freezes or resumes the character's animation (hit-stop on impact)
+    public void SetAnimationPaused(bool paused)
+    {
+        var animator = GetComponent<Animator>();
+        if (animator != null) animator.speed = paused ? 0f : 1f;
     }
 
     public void PlayDeath()
@@ -199,6 +229,7 @@ public class PlayerAvatar : MonoBehaviour
         LastAttack = null;
         attackSpeed = 1;
         var animator = GetComponent<Animator>();
+        if (animator != null) animator.speed = 1f;
         if (animator != null && animator.runtimeAnimatorController != null)
         {
             animator.Rebind();
@@ -289,7 +320,8 @@ public class PlayerAvatar : MonoBehaviour
 
         if (duel != null && duel.Match != null && PlayerProfiles.Instance != null)
         {
-            int hp = duel.Match.Health(playerIndex);
+            // Shown health only drops when the blade connects in the clash
+            int hp = duel.ShownHealth(playerIndex);
             label.text = PlayerProfiles.Instance.Get(playerIndex).name + $"\n{hp} / 100 HP";
             label.color = hp <= 25 ? Color.red : labelColor;
             if (healthFill != null)

@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-// Editor-only arrows submit the current player's defense or attack through the same turn rules as the pen.
+// Editor-only: while a gesture is being drawn (after "Draw"), an arrow key counts as the pen swipe.
 [RequireComponent(typeof(CardWeaponManager))]
 public class KeyboardCombatInput : MonoBehaviour
 {
@@ -25,7 +25,7 @@ public class KeyboardCombatInput : MonoBehaviour
         else if (keyboard.downArrowKey.wasPressedThisFrame) direction = AttackDirection.Down;
         else if (keyboard.leftArrowKey.wasPressedThisFrame) direction = AttackDirection.Left;
         else if (keyboard.rightArrowKey.wasPressedThisFrame) direction = AttackDirection.Right;
-        if (direction.HasValue && manager.Duel != null) manager.Duel.SubmitGesture(direction.Value);
+        if (direction.HasValue && manager.Duel != null) manager.Duel.KeyboardGesture(direction.Value);
     }
 
 #endif

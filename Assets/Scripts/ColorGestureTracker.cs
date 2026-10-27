@@ -129,6 +129,9 @@ public class ColorGestureTracker : MonoBehaviour
     private int consecutiveDetected = 0;
     private int consecutiveLost = 0;
     public bool isVisible { get; private set; }
+    // Smoothed pen position in viewport coordinates (0-1, y up), mirror/flip already applied
+    public Vector2 Tip => tip;
+    public bool TipVisible => isVisible && hasTip;
 
     // WebCam fallback for Linux Editor
     private WebCamTexture webcamTexture;
@@ -342,18 +345,14 @@ public class ColorGestureTracker : MonoBehaviour
     {
         if (!isActiveAndEnabled) return;
 
-        if (duel != null && duel.Match != null)
-        {
-            playerIndex = duel.Match.InputPlayer;
-        }
-
-        if (manager != null)
+        if (duel == null && manager != null)
         {
             var player = manager.GetAttackPlayer(playerIndex);
             if (target != player) { target = player; hasAnchor = false; }
         }
 
-        if (!trackingEnabled || IsCustomizeOpen())
+        // In a duel the camera image is only read while the duel waits for the pen or while calibrating
+        if (!trackingEnabled || IsCustomizeOpen() || (duel != null && !duel.WantsPen && !showSettingsWindow))
         {
             hasTip = hasAnchor = isVisible = false;
             consecutiveDetected = consecutiveLost = 0;
@@ -382,18 +381,14 @@ public class ColorGestureTracker : MonoBehaviour
     {
         if (!isActiveAndEnabled) return;
 
-        if (duel != null && duel.Match != null)
-        {
-            playerIndex = duel.Match.InputPlayer;
-        }
-
-        if (manager != null)
+        if (duel == null && manager != null)
         {
             var player = manager.GetAttackPlayer(playerIndex);
             if (target != player) { target = player; hasAnchor = false; }
         }
 
-        if (!trackingEnabled || IsCustomizeOpen())
+        // In a duel the camera image is only read while the duel waits for the pen or while calibrating
+        if (!trackingEnabled || IsCustomizeOpen() || (duel != null && !duel.WantsPen && !showSettingsWindow))
         {
             hasTip = hasAnchor = isVisible = false;
             consecutiveDetected = consecutiveLost = 0;
@@ -495,8 +490,8 @@ public class ColorGestureTracker : MonoBehaviour
 
         currentStatus = TrackerStatusKey.Detected;
 
-        // Combat gestures should ONLY register when an attack/defense is actively expected
-        bool isAwaitingCombatGesture = !showSettingsWindow && !IsCustomizeOpen() && (duel == null || duel.AcceptsGesture);
+        // In a duel the DuelController reads Tip itself (pen held in the square, then dragged)
+        bool isAwaitingCombatGesture = duel == null && !showSettingsWindow && !IsCustomizeOpen();
         if (!isAwaitingCombatGesture)
         {
             hasAnchor = false;
@@ -551,11 +546,7 @@ public class ColorGestureTracker : MonoBehaviour
                                           : (screenDelta.y > 0 ? AttackDirection.Up : AttackDirection.Down);
 
         bool accepted = false;
-        if (duel != null)
-        {
-            accepted = duel.SubmitGesture(direction);
-        }
-        else if (manager != null)
+        if (manager != null)
         {
             var player = manager.GetAttackPlayer(playerIndex);
             if (player != null)
@@ -1049,13 +1040,11 @@ public class ColorGestureTracker : MonoBehaviour
             GenerateCircleTexture();
         }
 
-        // Settings toggle button placed directly below Player 2 stats panel on the top right
-        float canvasScale = Mathf.Pow(Screen.width / 1280f, 0.5f) * Mathf.Pow(Screen.height / 720f, 0.5f);
-        float playerPanelBottom = 114f * canvasScale;
+        // Small settings toggle in the top right corner
         float btnW = 110 * scale;
         float btnH = 34 * scale;
-        float btnX = Screen.width - btnW - (12f * canvasScale);
-        float btnY = playerPanelBottom + (4f * scale);
+        float btnX = Screen.width - btnW - 12 * scale;
+        float btnY = 12 * scale;
         string settingsBtnText = Localization.Get("Settings", "Config");
         if (GUI.Button(new Rect(btnX, btnY, btnW, btnH), settingsBtnText, btnStyle))
         {
@@ -1239,6 +1228,9 @@ public class ColorGestureTracker : MonoBehaviour
             }
             GUI.color = prevGUI;
         }
+
+        // In a duel the pen is only drawn while the duel uses it (or while calibrating)
+        if (duel != null && !duel.WantsPen && !showSettingsWindow) return;
 
         // Render Motion Trail if enabled (rendered using unified ViewportToScreen coordinates)
         if (enableMotionTrail)

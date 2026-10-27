@@ -9,13 +9,20 @@ public class VuforiaArenaSetup : MonoBehaviour
     [Tooltip("Path relative to StreamingAssets; keep the matching .dat beside the XML.")]
     public string databasePath = "Vuforia/arena.xml";
     public string[] targetNames = { "sword", "axe", "shield", "dagger", "hammer", "sword2", "axe2", "shield2", "dagger2", "hammer2", "player1", "player2" };
+    // Tracking every card at once makes phones stutter. A duel needs 4 on screen
+    // (2 players + 2 equipped weapons), plus one spare. All targets stay loaded.
+    public const int MaxTrackedCards = 5;
     private bool targetsCreated;
 
     void Awake()
     {
+#if UNITY_EDITOR_LINUX
+        Debug.LogWarning("VuforiaEngine is not supported on Linux Editor. Running in WebCam fallback mode.");
+        enabled = false;
+        return;
+#endif
         var config = VuforiaConfiguration.Instance;
-        // Every card can be on the table at the same time
-        config.Vuforia.MaxSimultaneousImageTargets = Mathf.Max(1, targetNames.Length);
+        config.Vuforia.MaxSimultaneousImageTargets = Mathf.Clamp(targetNames.Length, 1, MaxTrackedCards);
         config.DeviceTracker.ARCoreRequirementSetting = VuforiaConfiguration.DeviceTrackerConfiguration.ARCoreRequirement.DONT_USE;
         config.DeviceTracker.AutoImportArcoreSetting = false;
         config.DeviceTracker.AutoInitAndStartTracker = false;

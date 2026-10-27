@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
+using UnityEngine;
 using Vuforia;
 
 // Persist these settings so the Vuforia build processor also excludes ARCore,
@@ -39,8 +40,8 @@ public class VuforiaArenaConfiguration : IPreprocessBuildWithReport
     static void Apply(VuforiaConfiguration config)
     {
         if (config == null) return;
-        // Every card of the database can be tracked at the same time
-        config.Vuforia.MaxSimultaneousImageTargets = CountDatabaseTargets();
+        // Same cap as at runtime (fewer if the database has fewer cards)
+        config.Vuforia.MaxSimultaneousImageTargets = Mathf.Min(CountDatabaseTargets(), VuforiaArenaSetup.MaxTrackedCards);
         config.DeviceTracker.ARCoreRequirementSetting = VuforiaConfiguration.DeviceTrackerConfiguration.ARCoreRequirement.DONT_USE;
         config.DeviceTracker.AutoImportArcoreSetting = false;
         config.DeviceTracker.AutoInitAndStartTracker = false;

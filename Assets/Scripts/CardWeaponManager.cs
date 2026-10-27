@@ -503,7 +503,7 @@ public class CardWeaponManager : MonoBehaviour
         }
 
         var lines = new System.Text.StringBuilder();
-        lines.AppendLine("Vuforia - cartoes: " + spawnedWeapons.Count);
+        lines.AppendLine("Vuforia - cards: " + spawnedWeapons.Count);
         foreach (var weapon in spawnedWeapons.Values)
         {
             var image = weapon.image;

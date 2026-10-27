@@ -1,5 +1,0 @@
-C:/Users/gluca/Desktop/Master FEUP/RVA-PROJECT/.utmp/Debug/1b6p3d3r/arm64-v8a/CMakeFiles/edit_cache.dir
-C:/Users/gluca/Desktop/Master FEUP/RVA-PROJECT/.utmp/Debug/1b6p3d3r/arm64-v8a/CMakeFiles/rebuild_cache.dir
-C:/Users/gluca/Desktop/Master FEUP/RVA-PROJECT/.utmp/Debug/1b6p3d3r/arm64-v8a/GameActivity/CMakeFiles/game.dir
-C:/Users/gluca/Desktop/Master FEUP/RVA-PROJECT/.utmp/Debug/1b6p3d3r/arm64-v8a/GameActivity/CMakeFiles/edit_cache.dir
-C:/Users/gluca/Desktop/Master FEUP/RVA-PROJECT/.utmp/Debug/1b6p3d3r/arm64-v8a/GameActivity/CMakeFiles/rebuild_cache.dir
