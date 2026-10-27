@@ -21,7 +21,8 @@ public class PlayerSetupUI : MonoBehaviour
     private int worldCameraMask;
     private const int PreviewLayer = 31;
 
-    private static readonly string[] CategoryLabels = { "Helmet", "Chest", "Arms", "Belt", "Legs", "Feet" };
+    private static readonly string[] CategoryLabelsEN = { "Helmet", "Chest", "Arms", "Belt", "Legs", "Feet" };
+    private static readonly string[] CategoryLabelsPT = { "Capacete", "Peito", "Braços", "Cinto", "Pernas", "Pés" };
 
     private PlayerProfiles profiles;
     private Font font;
@@ -32,6 +33,12 @@ public class PlayerSetupUI : MonoBehaviour
     private InputField nameField;
     private Text[] optionTexts;
     private Text helmetText;
+    private Text nameLabelText;
+    private Text[] categoryLabelTexts;
+    private Text randomizeText;
+    private Text doneText;
+
+    public bool IsPanelOpen => panel != null && panel.activeSelf;
 
 
     private static readonly Color ButtonColor = new Color(0.22f, 0.22f, 0.22f, 1f);
@@ -54,6 +61,32 @@ public class PlayerSetupUI : MonoBehaviour
         EnsureEventSystem();
         BuildUI();
         WaitForPlayer(0);
+        Localization.OnLanguageChanged += UpdateLanguageTexts;
+        UpdateLanguageTexts();
+    }
+
+    // Reopens the customization of the current player after the guided setup
+    public void TogglePanel()
+    {
+        if (!IsComplete || panel == null) return;
+        bool open = !panel.activeSelf;
+        panel.SetActive(open);
+        if (previewRoot != null) previewRoot.SetActive(open);
+        if (previewCamera != null) previewCamera.gameObject.SetActive(open);
+        if (open) Refresh();
+    }
+
+    private void UpdateLanguageTexts()
+    {
+        if (nameLabelText != null) nameLabelText.text = Localization.Get("Name", "Nome");
+        if (categoryLabelTexts != null)
+            for (int c = 0; c < categoryLabelTexts.Length; c++)
+                categoryLabelTexts[c].text = Localization.Get(CategoryLabelsEN[c], CategoryLabelsPT[c]);
+        if (randomizeText != null) randomizeText.text = Localization.Get("Randomize", "Aleatório");
+        if (doneText != null) doneText.text = Localization.Get("OK", "OK");
+        if (title != null) title.text = Localization.Get($"Customize Player {currentPlayer + 1}", $"Personalizar Jogador {currentPlayer + 1}");
+        if (scanPrompt != null) scanPrompt.text = Localization.Get($"Please scan the PLAYER {currentPlayer + 1} card.", $"Aponta a câmara para a carta PLAYER {currentPlayer + 1}.");
+        if (panel != null && panel.activeSelf) Refresh();
     }
 
     private int[] CountOptions()
@@ -125,17 +158,18 @@ public class PlayerSetupUI : MonoBehaviour
 
         // Name
         var nameRow = CreateRow(content);
-        CreateText(nameRow, "Name", 32, TextAnchor.MiddleLeft, 115);
+        nameLabelText = CreateText(nameRow, "Name", 32, TextAnchor.MiddleLeft, 115);
         nameField = CreateInputField(nameRow);
         nameField.onEndEdit.AddListener(OnNameChanged);
 
         // Armor categories
-        optionTexts = new Text[CategoryLabels.Length];
-        for (int c = 0; c < CategoryLabels.Length; c++)
+        optionTexts = new Text[CategoryLabelsEN.Length];
+        categoryLabelTexts = new Text[CategoryLabelsEN.Length];
+        for (int c = 0; c < CategoryLabelsEN.Length; c++)
         {
             int category = c;
             var row = CreateRow(content);
-            CreateText(row, CategoryLabels[c], 30, TextAnchor.MiddleLeft, 115);
+            categoryLabelTexts[c] = CreateText(row, CategoryLabelsEN[c], 30, TextAnchor.MiddleLeft, 115);
             CreateButton(row, "<", () => ChangeArmor(category, -1), 60);
             optionTexts[c] = CreateText(row, "", 30, TextAnchor.MiddleCenter);
             CreateButton(row, ">", () => ChangeArmor(category, 1), 60);
@@ -148,8 +182,9 @@ public class PlayerSetupUI : MonoBehaviour
 
         // Actions
         var actions = CreateRow(content);
-        CreateButton(actions, "Randomize", Randomize);
+        randomizeText = CreateButton(actions, "Randomize", Randomize).GetComponentInChildren<Text>();
         var done = CreateButton(actions, "OK", ConfirmPlayer);
+        doneText = done.GetComponentInChildren<Text>();
         done.GetComponent<Image>().color = SelectedColor;
     }
 
@@ -256,8 +291,7 @@ public class PlayerSetupUI : MonoBehaviour
             previewRoot.SetActive(true);
             previewAvatar.Apply();
             previewCamera.gameObject.SetActive(true);
-            title.text = $"Customize Player {currentPlayer + 1}";
-            Refresh();
+            UpdateLanguageTexts();
         }
     }
 
@@ -267,7 +301,7 @@ public class PlayerSetupUI : MonoBehaviour
         panel.SetActive(false);
         if (previewRoot != null) previewRoot.SetActive(false);
         if (previewCamera != null) previewCamera.gameObject.SetActive(false);
-        scanPrompt.text = $"Please scan the PLAYER {index + 1} card.";
+        UpdateLanguageTexts();
         scanPrompt.gameObject.SetActive(true);
     }
 
@@ -336,6 +370,7 @@ public class PlayerSetupUI : MonoBehaviour
 
     void OnDestroy()
     {
+        Localization.OnLanguageChanged -= UpdateLanguageTexts;
         if (worldCamera != null) worldCamera.cullingMask = worldCameraMask;
         if (previewCamera != null) Destroy(previewCamera.gameObject);
         if (previewRoot != null) Destroy(previewRoot);
@@ -354,7 +389,7 @@ public class PlayerSetupUI : MonoBehaviour
         {
             optionTexts[c].text = $"{Wrap(profile.armor[c], optionCounts[c]) + 1} / {optionCounts[c]}";
         }
-        helmetText.text = profile.showHelmet ? "Helmet: On" : "Helmet: Off";
+        helmetText.text = profile.showHelmet ? Localization.Get("Helmet: On", "Capacete: Sim") : Localization.Get("Helmet: Off", "Capacete: Não");
     }
 
     private static int Wrap(int value, int count)

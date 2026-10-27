@@ -1,2 +1,0 @@
-C:\Users\gluca\Desktop\Master FEUP\RVA-PROJECT\Library\Bee\Android\Prj\IL2CPP\Gradle\unityLibrary\src\main\cpp\CMakeLists.txt
-C:\Users\gluca\Desktop\Master FEUP\RVA-PROJECT\Library\Bee\Android\Prj\IL2CPP\Gradle\unityLibrary\src\main\cpp\GameActivity\CMakeLists.txt

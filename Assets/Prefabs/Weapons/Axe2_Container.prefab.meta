@@ -1,6 +1,11 @@
 fileFormatVersion: 2
+<<<<<<<< HEAD:Assets/Prefabs/Weapons/Axe2_Container.prefab.meta
 guid: 820dbc30136190d479de089740fc74ae
 PrefabImporter:
+========
+guid: 44537ab060a0fb4458e9ad4415679e05
+TextScriptImporter:
+>>>>>>>> marko/pen-tracking:Assets/Resources/PerformanceTestRunInfo.json.meta
   externalObjects: {}
   userData: 
   assetBundleName: 
