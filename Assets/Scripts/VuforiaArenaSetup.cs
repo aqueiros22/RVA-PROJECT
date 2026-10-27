@@ -8,7 +8,7 @@ public class VuforiaArenaSetup : MonoBehaviour
     public Camera arCamera;
     [Tooltip("Path relative to StreamingAssets; keep the matching .dat beside the XML.")]
     public string databasePath = "Vuforia/arena.xml";
-    public string[] targetNames = { "sword", "axe", "shield", "shield2", "dagger", "hammer", "player1", "player2" };
+    public string[] targetNames = { "sword", "axe", "shield", "dagger", "hammer", "sword2", "axe2", "shield2", "dagger2", "hammer2", "player1", "player2" };
     private bool targetsCreated;
 
     void Awake()

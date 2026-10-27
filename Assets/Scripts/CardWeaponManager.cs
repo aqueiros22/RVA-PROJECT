@@ -94,9 +94,9 @@ public class CardWeaponManager : MonoBehaviour
         playerSetup = FindAnyObjectByType<PlayerSetupUI>();
         Duel = GetComponent<DuelController>();
         if (Duel == null) Duel = gameObject.AddComponent<DuelController>();
-        // Shares the Vuforia camera with the red tip tracker.
-        if (GetComponent<RedTipAttackTracker>() == null)
-            gameObject.AddComponent<RedTipAttackTracker>();
+        // Shares the Vuforia camera with the gesture tracker.
+        if (GetComponent<ColorGestureTracker>() == null)
+            gameObject.AddComponent<ColorGestureTracker>();
     }
 
     public bool SetupInProgress
@@ -358,6 +358,7 @@ public class CardWeaponManager : MonoBehaviour
     // Equips a weapon to the closest player whose card stays next to the weapon card
     private void UpdateEquipping()
     {
+        if (Time.timeScale == 0f) return;
         float dt = Time.deltaTime;
 
         foreach (var weapon in spawnedWeapons.Values)

@@ -10,6 +10,7 @@ public class PlayerSetupUI : MonoBehaviour
     // Used to know how many options each armor category has
     public GameObject playerPrefab;
     public bool IsComplete { get; private set; }
+    public bool IsCustomizing => panel != null && panel.activeSelf;
     private CardWeaponManager manager;
     private Text scanPrompt;
     private Text title;
@@ -30,15 +31,33 @@ public class PlayerSetupUI : MonoBehaviour
     private int[] optionCounts;
 
     private InputField nameField;
+    private Text nameLabelText;
+    private Text[] categoryLabelTexts;
+    private Text randomizeButtonText;
+    private Text doneButtonText;
     private Text[] optionTexts;
     private Text helmetText;
-
 
     private static readonly Color ButtonColor = new Color(0.22f, 0.22f, 0.22f, 1f);
     private static readonly Color SelectedColor = new Color(0.85f, 0.65f, 0.1f, 1f);
 
+    private static string GetCategoryLabel(int index)
+    {
+        switch (index)
+        {
+            case 0: return Localization.Get("Helmet", "Capacete");
+            case 1: return Localization.Get("Chest", "Peitoral");
+            case 2: return Localization.Get("Arms", "Braços");
+            case 3: return Localization.Get("Belt", "Cinto");
+            case 4: return Localization.Get("Legs", "Pernas");
+            case 5: return Localization.Get("Feet", "Pés");
+            default: return "";
+        }
+    }
+
     void Start()
     {
+        Localization.OnLanguageChanged += UpdateLocalizedTexts;
         profiles = GetComponent<PlayerProfiles>();
         manager = FindFirstObjectByType<CardWeaponManager>();
         font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
@@ -125,17 +144,18 @@ public class PlayerSetupUI : MonoBehaviour
 
         // Name
         var nameRow = CreateRow(content);
-        CreateText(nameRow, "Name", 32, TextAnchor.MiddleLeft, 115);
+        nameLabelText = CreateText(nameRow, Localization.Get("Name", "Nome"), 32, TextAnchor.MiddleLeft, 115);
         nameField = CreateInputField(nameRow);
         nameField.onEndEdit.AddListener(OnNameChanged);
 
         // Armor categories
         optionTexts = new Text[CategoryLabels.Length];
+        categoryLabelTexts = new Text[CategoryLabels.Length];
         for (int c = 0; c < CategoryLabels.Length; c++)
         {
             int category = c;
             var row = CreateRow(content);
-            CreateText(row, CategoryLabels[c], 30, TextAnchor.MiddleLeft, 115);
+            categoryLabelTexts[c] = CreateText(row, GetCategoryLabel(c), 30, TextAnchor.MiddleLeft, 115);
             CreateButton(row, "<", () => ChangeArmor(category, -1), 60);
             optionTexts[c] = CreateText(row, "", 30, TextAnchor.MiddleCenter);
             CreateButton(row, ">", () => ChangeArmor(category, 1), 60);
@@ -148,8 +168,10 @@ public class PlayerSetupUI : MonoBehaviour
 
         // Actions
         var actions = CreateRow(content);
-        CreateButton(actions, "Randomize", Randomize);
-        var done = CreateButton(actions, "OK", ConfirmPlayer);
+        var randBtn = CreateButton(actions, Localization.Get("Randomize", "Aleatório"), Randomize);
+        randomizeButtonText = randBtn.GetComponentInChildren<Text>();
+        var done = CreateButton(actions, Localization.Get("OK", "Pronto"), ConfirmPlayer);
+        doneButtonText = done.GetComponentInChildren<Text>();
         done.GetComponent<Image>().color = SelectedColor;
     }
 
@@ -248,6 +270,17 @@ public class PlayerSetupUI : MonoBehaviour
 
     void Update()
     {
+        if (Time.timeScale == 0f)
+        {
+            if (scanPrompt != null && scanPrompt.gameObject.activeSelf)
+                scanPrompt.gameObject.SetActive(false);
+            return;
+        }
+        else if (!IsComplete && !panel.activeSelf && scanPrompt != null && !scanPrompt.gameObject.activeSelf)
+        {
+            scanPrompt.gameObject.SetActive(true);
+        }
+
         if (!IsComplete && !panel.activeSelf && previewAvatar != null && manager != null && manager.IsPlayerTracked(currentPlayer))
         {
             scanPrompt.gameObject.SetActive(false);
@@ -256,7 +289,9 @@ public class PlayerSetupUI : MonoBehaviour
             previewRoot.SetActive(true);
             previewAvatar.Apply();
             previewCamera.gameObject.SetActive(true);
-            title.text = $"Customize Player {currentPlayer + 1}";
+            title.text = Localization.Get(
+                $"Customize Player {currentPlayer + 1}",
+                $"Personalizar Jogador {currentPlayer + 1}");
             Refresh();
         }
     }
@@ -267,7 +302,9 @@ public class PlayerSetupUI : MonoBehaviour
         panel.SetActive(false);
         if (previewRoot != null) previewRoot.SetActive(false);
         if (previewCamera != null) previewCamera.gameObject.SetActive(false);
-        scanPrompt.text = $"Please scan the PLAYER {index + 1} card.";
+        scanPrompt.text = Localization.Get(
+            $"Please scan the PLAYER {index + 1} card.",
+            $"Por favor, aponte para a carta JOGADOR {index + 1}.");
         scanPrompt.gameObject.SetActive(true);
     }
 
@@ -336,6 +373,7 @@ public class PlayerSetupUI : MonoBehaviour
 
     void OnDestroy()
     {
+        Localization.OnLanguageChanged -= UpdateLocalizedTexts;
         if (worldCamera != null) worldCamera.cullingMask = worldCameraMask;
         if (previewCamera != null) Destroy(previewCamera.gameObject);
         if (previewRoot != null) Destroy(previewRoot);
@@ -346,6 +384,43 @@ public class PlayerSetupUI : MonoBehaviour
         }
     }
 
+    private void UpdateLocalizedTexts()
+    {
+        if (title != null)
+        {
+            title.text = Localization.Get(
+                $"Customize Player {currentPlayer + 1}",
+                $"Personalizar Jogador {currentPlayer + 1}");
+        }
+        if (scanPrompt != null)
+        {
+            scanPrompt.text = Localization.Get(
+                $"Please scan the PLAYER {currentPlayer + 1} card.",
+                $"Por favor, aponte para a carta JOGADOR {currentPlayer + 1}.");
+        }
+        if (nameLabelText != null)
+        {
+            nameLabelText.text = Localization.Get("Name", "Nome");
+        }
+        if (categoryLabelTexts != null)
+        {
+            for (int i = 0; i < categoryLabelTexts.Length; i++)
+            {
+                if (categoryLabelTexts[i] != null)
+                    categoryLabelTexts[i].text = GetCategoryLabel(i);
+            }
+        }
+        if (randomizeButtonText != null)
+        {
+            randomizeButtonText.text = Localization.Get("Randomize", "Aleatório");
+        }
+        if (doneButtonText != null)
+        {
+            doneButtonText.text = Localization.Get("OK", "Pronto");
+        }
+        Refresh();
+    }
+
     private void Refresh()
     {
         var profile = profiles.Get(currentPlayer);
@@ -354,7 +429,9 @@ public class PlayerSetupUI : MonoBehaviour
         {
             optionTexts[c].text = $"{Wrap(profile.armor[c], optionCounts[c]) + 1} / {optionCounts[c]}";
         }
-        helmetText.text = profile.showHelmet ? "Helmet: On" : "Helmet: Off";
+        helmetText.text = profile.showHelmet
+            ? Localization.Get("Helmet: On", "Capacete: Sim")
+            : Localization.Get("Helmet: Off", "Capacete: Não");
     }
 
     private static int Wrap(int value, int count)
@@ -365,7 +442,8 @@ public class PlayerSetupUI : MonoBehaviour
     private void OnNameChanged(string value)
     {
         var profile = profiles.Get(currentPlayer);
-        profile.name = string.IsNullOrWhiteSpace(value) ? $"Player {currentPlayer + 1}" : value.Trim();
+        string defaultName = Localization.Get($"Player {currentPlayer + 1}", $"Jogador {currentPlayer + 1}");
+        profile.name = string.IsNullOrWhiteSpace(value) ? defaultName : value.Trim();
         profiles.NotifyChanged(currentPlayer);
         Refresh();
     }

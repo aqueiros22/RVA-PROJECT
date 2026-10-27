@@ -10,7 +10,7 @@ public class DuelController : MonoBehaviour
         (Match.Phase == DuelPhase.Defense || Match.Phase == DuelPhase.Attack) && PlayersVisible;
     private bool PlayersVisible => manager.GetAttackPlayer(0) != null && manager.GetAttackPlayer(1) != null;
     private CardWeaponManager manager;
-    private RedTipAttackTracker pen;
+    private ColorGestureTracker pen;
     private GameObject hud;
     private Text prompt, actionText;
     private readonly Text[] playerTexts = new Text[2];
@@ -18,17 +18,26 @@ public class DuelController : MonoBehaviour
     private readonly Image[] playerPanels = new Image[2];
     private Button action;
     private float inputReady, resultReady;
+    private Image screenFlashOverlay;
+    private Coroutine flashRoutine;
 
     void Start()
     {
+        Localization.OnLanguageChanged += RefreshHUD;
         manager = GetComponent<CardWeaponManager>();
-        pen = GetComponent<RedTipAttackTracker>();
+        pen = GetComponent<ColorGestureTracker>();
         BuildHUD();
         hud.SetActive(false);
     }
 
+    void OnDestroy()
+    {
+        Localization.OnLanguageChanged -= RefreshHUD;
+    }
+
     void Update()
     {
+        if (Time.timeScale == 0f) return;
         if (manager.SetupInProgress) { hud.SetActive(false); return; }
         if (Match == null) Restart();
         hud.SetActive(true);
@@ -66,10 +75,57 @@ public class DuelController : MonoBehaviour
     private IEnumerator React(int defender, AttackDirection direction, bool blocked, bool dead)
     {
         yield return new WaitForSecondsRealtime(0.35f);
+
+        // Flash green if blocked, red if hit
+        if (blocked)
+        {
+            TriggerScreenFlash(new Color(0.15f, 0.90f, 0.30f, 0.32f), 0.85f);
+        }
+        else
+        {
+            TriggerScreenFlash(new Color(0.95f, 0.15f, 0.15f, 0.35f), 0.85f);
+        }
+
         var avatar = manager.GetAvatar(defender);
         if (avatar == null) yield break;
         if (dead) avatar.PlayDeath();
         else if (blocked) avatar.PlayDefense(direction);
+    }
+
+    public void TriggerScreenFlash(Color color, float duration = 0.85f)
+    {
+        if (screenFlashOverlay == null) return;
+        if (flashRoutine != null) StopCoroutine(flashRoutine);
+        flashRoutine = StartCoroutine(AnimateScreenFlash(color, duration));
+    }
+
+    private IEnumerator AnimateScreenFlash(Color color, float duration)
+    {
+        float elapsed = 0f;
+        float attackTime = 0.06f; // Rapid flash in
+        float maxAlpha = color.a;
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float currentAlpha;
+            if (elapsed < attackTime)
+            {
+                currentAlpha = Mathf.Lerp(0f, maxAlpha, elapsed / attackTime);
+            }
+            else
+            {
+                float decayProgress = (elapsed - attackTime) / (duration - attackTime);
+                currentAlpha = Mathf.Lerp(maxAlpha, 0f, decayProgress);
+            }
+
+            color.a = currentAlpha;
+            screenFlashOverlay.color = color;
+            yield return null;
+        }
+
+        screenFlashOverlay.color = Color.clear;
+        flashRoutine = null;
     }
 
     private void ResetInput()
@@ -92,6 +148,8 @@ public class DuelController : MonoBehaviour
     private void Restart()
     {
         StopAllCoroutines();
+        if (screenFlashOverlay != null) screenFlashOverlay.color = Color.clear;
+        flashRoutine = null;
         Match = new DuelMatch();
         manager.ClearRoundWeapons();
         for (int i = 0; i < 2; i++)
@@ -105,7 +163,8 @@ public class DuelController : MonoBehaviour
     private string PlayerName(int i)
     {
         string name = PlayerProfiles.Instance != null ? PlayerProfiles.Instance.Get(i).name : "";
-        return $"Player {(i == 0 ? "A" : "B")} ({i + 1})" + (string.IsNullOrWhiteSpace(name) ? "" : $" - {name}");
+        string prefix = Localization.Get("Player", "Jogador");
+        return $"{prefix} {(i == 0 ? "A" : "B")} ({i + 1})" + (string.IsNullOrWhiteSpace(name) ? "" : $" - {name}");
     }
 
     private void RefreshHUD()
@@ -113,42 +172,92 @@ public class DuelController : MonoBehaviour
         bool gesturePhase = Match.Phase == DuelPhase.Defense || Match.Phase == DuelPhase.Attack;
         for (int i = 0; i < 2; i++)
         {
-            string role = Match.Phase == DuelPhase.Pick ? (Match.Equipped(i) == null ? "PICK A CARD" : "READY") :
-                Match.Phase == DuelPhase.GameOver ? "" : i == Match.Attacker ? "ATTACKER" : "DEFENDER";
-            string weapon = Match.Equipped(i)?.id.ToUpperInvariant() ?? "No weapon";
-            playerTexts[i].text = $"{PlayerName(i)}  |  {role}\n{Match.Health(i)} / 100 HP  |  Blocks: {Match.Blocks(i)}  |  {weapon}";
+            string role = Match.Phase == DuelPhase.Pick 
+                ? (Match.Equipped(i) == null 
+                    ? Localization.Get("PICK A CARD", "ESCOLHA UMA CARTA") 
+                    : Localization.Get("READY", "PRONTO"))
+                : Match.Phase == DuelPhase.GameOver ? "" 
+                : i == Match.Attacker 
+                    ? Localization.Get("ATTACKER", "ATACANTE") 
+                    : Localization.Get("DEFENDER", "DEFENSOR");
+
+            string noWeaponStr = Localization.Get("No weapon", "Sem arma");
+            string weapon = Match.Equipped(i)?.id.ToUpperInvariant() ?? noWeaponStr;
+            string blocksLabel = Localization.Get("Blocks", "Defesas");
+            playerTexts[i].text = $"{PlayerName(i)}  |  {role}\n{Match.Health(i)} / 100 HP  |  {blocksLabel}: {Match.Blocks(i)}  |  {weapon}";
             healthBars[i].rectTransform.anchorMax = new Vector2(Match.Health(i) / 100f, 1);
             healthBars[i].color = Match.Health(i) <= 25 ? Color.red : new Color(0.25f, 0.85f, 0.4f);
             playerPanels[i].color = gesturePhase && Match.InputPlayer == i ? new Color(0.35f, 0.25f, 0.06f, 0.95f) : new Color(0.04f, 0.06f, 0.09f, 0.9f);
         }
-        string a = Match.Attacker == 0 ? "Player A" : "Player B";
-        string d = Match.Defender == 0 ? "Player A" : "Player B";
+        string a = Match.Attacker == 0 
+            ? Localization.Get("Player A", "Jogador A") 
+            : Localization.Get("Player B", "Jogador B");
+        string d = Match.Defender == 0 
+            ? Localization.Get("Player A", "Jogador A") 
+            : Localization.Get("Player B", "Jogador B");
+
         switch (Match.Phase)
         {
             case DuelPhase.Pick:
-                prompt.text = "PICK: reveal one card each, then slide it next to your own player.\nPlayer A: regular cards. Player B: II cards. Used cards cannot be played again.";
+                prompt.text = Localization.Get(
+                    "PICK: reveal one card each, then slide it next to your own player.\nPlayer A: regular cards. Player B: II cards. Used cards cannot be played again.",
+                    "ESCOLHA: revele uma carta cada, depois deslize-a para junto do seu jogador.\nJogador A: cartas normais. Jogador B: cartas II. Cartas usadas não podem ser jogadas novamente."
+                );
                 break;
             case DuelPhase.Defense:
-                prompt.text = $"{d}: choose your defense. {a}: don't look!\nMove the pen up, down, left or right.";
+                prompt.text = Localization.Get(
+                    $"{d}: choose your defense. {a}: don't look!\nMove the pen up, down, left or right.",
+                    $"{d}: escolha a sua defesa. {a}: não olhe!\nMova a caneta para cima, baixo, esquerda ou direita."
+                );
                 break;
             case DuelPhase.DefenseChosen:
-                prompt.text = $"Defense chosen.\nPass the pen to {a}, then press Ready to attack.";
+                prompt.text = Localization.Get(
+                    $"Defense chosen.\nPass the pen to {a}, then press Ready to attack.",
+                    $"Defesa escolhida.\nPasse a caneta para {a}, depois prima Pronto para atacar."
+                );
                 break;
             case DuelPhase.Attack:
-                prompt.text = $"{a}: attack!\nMove the pen up, down, left or right.";
+                prompt.text = Localization.Get(
+                    $"{a}: attack!\nMove the pen up, down, left or right.",
+                    $"{a}: ataque!\nMova a caneta para cima, baixo, esquerda ou direita."
+                );
                 break;
             case DuelPhase.Result:
-                prompt.text = $"{(Match.LastBlocked ? "Blocked!" : "Hit!")} {d} takes {Match.LastDamage} damage.\n{d}: {Match.Health(Match.Defender)} / 100 HP";
+                string hitOrBlocked = Match.LastBlocked 
+                    ? Localization.Get("Blocked!", "Bloqueado!") 
+                    : Localization.Get("Hit!", "Acertou!");
+                string takesDamage = Localization.Get(
+                    $"{d} takes {Match.LastDamage} damage.",
+                    $"{d} sofre {Match.LastDamage} de dano."
+                );
+                prompt.text = $"{hitOrBlocked} {takesDamage}\n{d}: {Match.Health(Match.Defender)} / 100 HP";
                 break;
             case DuelPhase.GameOver:
-                prompt.text = Match.Winner < 0 ? "Game over - Draw!" : $"Game over - {PlayerName(Match.Winner)} wins!";
+                prompt.text = Match.Winner < 0 
+                    ? Localization.Get("Game over - Draw!", "Fim de jogo - Empate!") 
+                    : Localization.Get($"Game over - {PlayerName(Match.Winner)} wins!", $"Fim de jogo - {PlayerName(Match.Winner)} venceu!");
                 break;
         }
-        if (gesturePhase && !PlayersVisible) prompt.text += "\nKeep both PLAYER cards visible to continue.";
-        prompt.text = $"ROUND {Match.Round} / 3\n" + prompt.text;
+
+        if (gesturePhase && !PlayersVisible)
+        {
+            prompt.text += "\n" + Localization.Get(
+                "Keep both PLAYER cards visible to continue.",
+                "Mantenha ambas as cartas de JOGADOR visíveis para continuar."
+            );
+        }
+
+        string roundLabel = Localization.Get("ROUND", "RONDA");
+        prompt.text = $"{roundLabel} {Match.Round} / 3\n" + prompt.text;
+
         action.gameObject.SetActive(Match.Phase == DuelPhase.DefenseChosen || Match.Phase == DuelPhase.Result || Match.Phase == DuelPhase.GameOver);
         action.interactable = Match.Phase != DuelPhase.Result || Time.unscaledTime >= resultReady;
-        actionText.text = Match.Phase == DuelPhase.GameOver ? "Play again" : Match.Phase == DuelPhase.DefenseChosen ? "Ready to attack" : "Continue";
+
+        actionText.text = Match.Phase == DuelPhase.GameOver 
+            ? Localization.Get("Play again", "Jogar novamente") 
+            : Match.Phase == DuelPhase.DefenseChosen 
+                ? Localization.Get("Ready to attack", "Pronto para atacar") 
+                : Localization.Get("Continue", "Continuar");
     }
 
     private void BuildHUD()
@@ -181,6 +290,15 @@ public class DuelController : MonoBehaviour
         action.onClick.AddListener(Advance);
         actionText = Label(action.transform, 24);
         Rect(actionText.rectTransform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+
+        // Fullscreen flash overlay for combat feedback (red on hit, green on block)
+        var flashObj = new GameObject("Screen Flash Overlay", typeof(RectTransform), typeof(Image));
+        flashObj.transform.SetParent(hud.transform, false);
+        var flashRect = flashObj.GetComponent<RectTransform>();
+        Rect(flashRect, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+        screenFlashOverlay = flashObj.GetComponent<Image>();
+        screenFlashOverlay.color = Color.clear;
+        screenFlashOverlay.raycastTarget = false;
     }
 
     private static Image Box(Transform parent, string name, Vector2 min, Vector2 max, Vector2 offsetMin, Vector2 offsetMax)
