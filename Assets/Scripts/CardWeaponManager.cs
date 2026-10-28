@@ -91,6 +91,7 @@ public class CardWeaponManager : MonoBehaviour
 
     void Awake()
     {
+        if (GetComponent<ArenaMenu>() == null) gameObject.AddComponent<ArenaMenu>();
         playerSetup = FindAnyObjectByType<PlayerSetupUI>();
         Duel = GetComponent<DuelController>();
         if (Duel == null) Duel = gameObject.AddComponent<DuelController>();
@@ -103,7 +104,7 @@ public class CardWeaponManager : MonoBehaviour
     {
         get
         {
-            return playerSetup != null && playerSetup.isActiveAndEnabled && !playerSetup.IsComplete;
+            return ArenaMenu.IsOpen || (playerSetup != null && playerSetup.isActiveAndEnabled && !playerSetup.IsComplete);
         }
     }
 
@@ -365,6 +366,7 @@ public class CardWeaponManager : MonoBehaviour
         {
             if (weapon.isPlayer) continue;
             int owner = weapon.image != null && weapon.image.TargetName.EndsWith("2") ? 1 : 0;
+            if (ArenaMenu.IsComputer(owner)) continue;
             if (weapon.image == null || !Duel.CanEquip(owner, weapon.image.TargetName))
             {
                 weapon.equipTarget = null;
@@ -423,6 +425,34 @@ public class CardWeaponManager : MonoBehaviour
                 SetRing(weapon, null, 0f);
             }
         }
+    }
+
+    // Computer weapons use the same card IDs/rules, but do not need physical weapon cards.
+    public bool EquipRandomComputerWeapon(int playerIndex)
+    {
+        var player = GetPlayer(playerIndex);
+        if (player == null || Duel.Match == null) return false;
+        var prefabs = playerIndex == 0
+            ? new[] { swordPrefab, axePrefab, shieldPrefab, daggerPrefab, hammerPrefab }
+            : new[] { sword2Prefab, axe2Prefab, shield2Prefab, dagger2Prefab, hammer2Prefab };
+        var names = new[] { "sword", "axe", "shield", "dagger", "hammer" };
+        var available = new List<int>();
+        for (int i = 0; i < prefabs.Length; i++)
+        {
+            string id = names[i] + (playerIndex == 1 ? "2" : "");
+            if (prefabs[i] != null && prefabs[i].GetComponent<WeaponStats>() != null && Duel.CanEquip(playerIndex, id))
+                available.Add(i);
+        }
+        if (available.Count == 0) return false;
+        int choice = available[Random.Range(0, available.Count)];
+        var prefab = prefabs[choice];
+        var stats = prefab.GetComponent<WeaponStats>();
+        if (!Duel.Equip(playerIndex, names[choice] + (playerIndex == 1 ? "2" : ""), stats)) return false;
+        var grip = prefab.GetComponent<WeaponGrip>();
+        player.Equip(prefab, GetPrefabHeight(prefab), equippedWeaponHeight,
+            grip != null ? grip.offset : gripOffset, Quaternion.Euler(grip != null ? grip.rotation : gripRotation));
+        player.attackSpeed = stats.weaponClass == WeaponClass.Heavy ? 0.8f : 1f;
+        return true;
     }
 
     private void Equip(SpawnedWeapon weapon, SpawnedWeapon player)

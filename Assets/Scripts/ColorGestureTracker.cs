@@ -1029,7 +1029,7 @@ public class ColorGestureTracker : MonoBehaviour
 
     void OnGUI()
     {
-        if (!showOverlay || IsCustomizeOpen()) return;
+        if (ArenaMenu.IsOpen || !showOverlay || IsCustomizeOpen()) return;
         GUI.depth = -100;
 
         float scale = Mathf.Max(1f, Screen.height / 900f);

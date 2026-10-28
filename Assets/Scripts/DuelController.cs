@@ -38,6 +38,8 @@ public class DuelController : MonoBehaviour
     private float captureEnd, reviewStart, lastPenSeen;
     private string notice;
     private string announcement;
+    private float nextComputerAction;
+    private DuelPhase previousPhase;
 
     private GameObject hud;
     private Text prompt, bigText, fightText, roundText, legendHint;
@@ -84,11 +86,40 @@ public class DuelController : MonoBehaviour
         }
         if (Match == null) Restart();
         hud.SetActive(true);
+        UpdateComputers();
         UpdateCapture();
         RefreshHUD();
     }
 
     public bool CanEquip(int player, string card) => Match != null && Match.CanEquip(player, card);
+
+    private void UpdateComputers()
+    {
+        if (Time.timeScale == 0f) return;
+        if (Match.Phase != previousPhase)
+        {
+            previousPhase = Match.Phase;
+            nextComputerAction = Time.unscaledTime + (Match.Phase == DuelPhase.Result ? 2.5f : 0.8f);
+        }
+        if (Time.unscaledTime < nextComputerAction) return;
+        if (Match.Phase == DuelPhase.Pick)
+        {
+            for (int i = 0; i < 2; i++)
+                if (ArenaMenu.IsComputer(i) && Match.Equipped(i) == null) manager.EquipRandomComputerWeapon(i);
+        }
+        else if (Match.Phase == DuelPhase.Record && ArenaMenu.IsComputer(Match.CurrentPlayer))
+        {
+            Match.Record(Match.CurrentPlayer, Match.CurrentSlot, (AttackDirection)Random.Range(0, 4));
+            Match.ConfirmStep();
+            CancelCapture();
+        }
+        else if (ArenaMenu.Mode == ArenaMode.ComputerVsComputer)
+        {
+            if (Match.Phase == DuelPhase.Fight && PlayersReady) Fight();
+            else if (Match.Phase == DuelPhase.Result) Advance();
+        }
+        nextComputerAction = Time.unscaledTime + 0.8f;
+    }
     public bool IsUsed(string card) => Match != null && Match.IsUsed(card);
     // Health as the players see it: it only drops when the blade connects in the clash
     public int ShownHealth(int player) => shownHealth[player];
@@ -314,6 +345,10 @@ public class DuelController : MonoBehaviour
                                     "Cada classe vence a seguinte.\nAponta a câmara às tuas cartas: verde = vence, vermelho = perde contra.");
                 text = L("Reveal one card each and slide it next to your player.\nPlayer A: regular cards. Player B: II cards.",
                          "Revelem uma carta cada um e encostem-na ao vosso jogador.\nJogador A: cartas normais. Jogador B: cartas II.");
+                if (ArenaMenu.Mode == ArenaMode.ComputerVsComputer)
+                    text = L("Position both PLAYER cards in view. The computers will play automatically.", "Posiciona as duas cartas PLAYER. Os computadores jogam automaticamente.");
+                else if (ArenaMenu.Mode == ArenaMode.PlayerVsComputer)
+                    text = L("Player A: choose a weapon card. Keep both PLAYER cards in view. Player B is the computer.", "Jogador A: escolhe uma carta de arma. Mantem as duas cartas PLAYER visiveis. O jogador B e o computador.");
                 break;
             case DuelPhase.Record:
                 text = RecordPrompt();
@@ -337,6 +372,12 @@ public class DuelController : MonoBehaviour
                     L($"Game over - {PlayerName(Match.Winner)} wins!", $"Fim do jogo - {PlayerName(Match.Winner)} ganha!");
                 bigText.text = Match.Winner < 0 ? L("DRAW", "EMPATE") : L($"{PlayerName(Match.Winner)} WINS", $"{PlayerName(Match.Winner)} GANHA");
                 SetButton(Right, L("Play again", "Jogar outra vez"), Restart);
+                SetButton(Left, L("Main menu", "Menu principal"), () =>
+                {
+                    Restart();
+                    FindFirstObjectByType<PlayerSetupUI>()?.ResetSetup();
+                    GetComponent<ArenaMenu>().Open();
+                });
                 break;
         }
         if (!string.IsNullOrEmpty(notice)) text += "\n" + notice;
@@ -346,6 +387,7 @@ public class DuelController : MonoBehaviour
 
     private string RecordPrompt()
     {
+        if (ArenaMenu.IsComputer(Match.CurrentPlayer)) return L("Computer is choosing a secret move...", "O computador esta a escolher um movimento secreto...");
         int me = Match.CurrentPlayer, other = 1 - me;
         string slot = SlotName(Match.CurrentSlot);
         switch (capture)

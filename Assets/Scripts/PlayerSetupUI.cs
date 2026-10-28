@@ -270,6 +270,17 @@ public class PlayerSetupUI : MonoBehaviour
 
     void Update()
     {
+        if (ArenaMenu.IsOpen)
+        {
+            scanPrompt.gameObject.SetActive(false);
+            return;
+        }
+        if (!IsComplete && ArenaMenu.IsComputer(currentPlayer) && manager != null && manager.IsPlayerTracked(currentPlayer))
+        {
+            Randomize();
+            ConfirmPlayer();
+            return;
+        }
         if (Time.timeScale == 0f)
         {
             if (scanPrompt != null && scanPrompt.gameObject.activeSelf)
@@ -281,7 +292,7 @@ public class PlayerSetupUI : MonoBehaviour
             scanPrompt.gameObject.SetActive(true);
         }
 
-        if (!IsComplete && !panel.activeSelf && previewAvatar != null && manager != null && manager.IsPlayerTracked(currentPlayer))
+        if (!IsComplete && !ArenaMenu.IsComputer(currentPlayer) && !panel.activeSelf && previewAvatar != null && manager != null && manager.IsPlayerTracked(currentPlayer))
         {
             scanPrompt.gameObject.SetActive(false);
             panel.SetActive(true);
@@ -306,6 +317,12 @@ public class PlayerSetupUI : MonoBehaviour
             $"Please scan the PLAYER {index + 1} card.",
             $"Por favor, aponte para a carta JOGADOR {index + 1}.");
         scanPrompt.gameObject.SetActive(true);
+    }
+
+    public void ResetSetup()
+    {
+        IsComplete = false;
+        WaitForPlayer(0);
     }
 
     private void ConfirmPlayer()
