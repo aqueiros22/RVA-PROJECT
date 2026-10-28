@@ -1,0 +1,11 @@
+# War Cry
+
+During a human attack gesture, shout while the HUD says DRAG. The microphone is opened during the countdown to allow startup, but only the drawing phase contributes to the bonus. Defense gestures do not use the microphone. Review freezes the bonus, Redo discards it, and Confirm stores it for that player's attack. The HUD shows digital volume and the damage multiplier. The weapon gains procedural lightning that grows with the bonus and remains during the clash.
+
+The microphone's RMS amplitude is converted with `20 * log10(RMS)` into dBFS. These are digital levels, not calibrated physical dB SPL. The loudest sampled window during the gesture determines power. Defaults: -35 dBFS or below gives x1 damage, -21.5 gives x1.5, and -8 or above gives x2. The WarCryMicrophone component exposes both thresholds in the Inspector during Play; attach/configure it on the arena manager to persist tuning. Ordinary loud ambient sounds also count: this detects volume, not speech or the identity of the person shouting.
+
+Damage applies weapon class advantage, blocking and the cry multiplier before rounding once. Each attack has its own bonus, cleared between rounds and rematches. Computer attacks generate random digital levels from -45 to -5 dBFS, passed through the same power curve, in both P v C and C v C. Computers do not open the microphone.
+
+Android requests microphone permission at first human attack capture; iOS uses the microphone usage description in Player Settings. Permission denial, no input device, or startup failure leaves normal damage available. Audio stays in a short memory buffer and is never saved or uploaded. Recording stops on review, cancellation, failed capture, disabling the component, application pause, or loss of focus.
+
+Validation: compile Unity scripts for Editor and Android conditional branches, then run Tests/DuelMatchTests.cs with DuelMatch.cs, PenStroke.cs and WarCryRules.cs. On a physical phone, allow the microphone, record quiet/loud attacks, confirm or redo, compare actual damage, verify lightning follows the weapon in the clash, and test denied permissions plus both computer modes. Device audio and shader rendering require live Unity/device validation.

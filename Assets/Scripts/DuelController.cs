@@ -38,6 +38,8 @@ public class DuelController : MonoBehaviour
     private float captureEnd, reviewStart, lastPenSeen;
     private string notice;
     private string announcement;
+    private WarCryMicrophone warCry;
+    private float pendingCryPower;
     private float nextComputerAction;
     private DuelPhase previousPhase;
 
@@ -63,6 +65,8 @@ public class DuelController : MonoBehaviour
 
     void Start()
     {
+        warCry = GetComponent<WarCryMicrophone>();
+        if (warCry == null) warCry = gameObject.AddComponent<WarCryMicrophone>();
         manager = GetComponent<CardWeaponManager>();
         pen = GetComponent<ColorGestureTracker>();
         clash = GetComponent<ClashDirector>();
@@ -88,6 +92,7 @@ public class DuelController : MonoBehaviour
         hud.SetActive(true);
         UpdateComputers();
         UpdateCapture();
+        UpdateWarCryAura();
         RefreshHUD();
     }
 
@@ -109,7 +114,10 @@ public class DuelController : MonoBehaviour
         }
         else if (Match.Phase == DuelPhase.Record && ArenaMenu.IsComputer(Match.CurrentPlayer))
         {
-            Match.Record(Match.CurrentPlayer, Match.CurrentSlot, (AttackDirection)Random.Range(0, 4));
+            // Simulate a microphone level with the same threshold and damage curve as humans.
+            float simulatedPower = Match.CurrentSlot == GestureSlot.Attack
+                ? WarCryRules.Power(Random.Range(-45f, -5f), warCry.thresholdDb, warCry.fullPowerDb) : 0;
+            Match.Record(Match.CurrentPlayer, Match.CurrentSlot, (AttackDirection)Random.Range(0, 4), simulatedPower);
             Match.ConfirmStep();
             CancelCapture();
         }
@@ -142,6 +150,8 @@ public class DuelController : MonoBehaviour
     private void DetectPen()
     {
         if (Match.Phase != DuelPhase.Record) return;
+        pendingCryPower = 0;
+        if (Match.CurrentSlot == GestureSlot.Attack) warCry.Begin();
         capture = Capture.Countdown;
         captureEnd = Time.unscaledTime + countdownSeconds;
         notice = null;
@@ -150,12 +160,13 @@ public class DuelController : MonoBehaviour
     private void UpdateCapture()
     {
         if (Match.Phase != DuelPhase.Record) { CancelCapture(); return; }
+        if (Time.timeScale == 0f) { CancelCapture(); return; }
         float now = Time.unscaledTime;
         if (capture == Capture.Countdown && now >= captureEnd)
         {
             if (!PenInSquare())
             {
-                capture = Capture.None;
+                CancelCapture();
                 notice = L("The pen was not in the square - try again.", "A caneta não estava no quadrado - tenta outra vez.");
                 return;
             }
@@ -166,6 +177,8 @@ public class DuelController : MonoBehaviour
         }
         else if (capture == Capture.Armed)
         {
+            warCry.SetMeasuring(Match.CurrentSlot == GestureSlot.Attack && Time.timeScale > 0);
+            warCry.Sample();
             if (pen != null && pen.TipVisible)
             {
                 lastPenSeen = now;
@@ -175,12 +188,12 @@ public class DuelController : MonoBehaviour
             }
             if (now - lastPenSeen > lostPenTimeout)
             {
-                capture = Capture.None;
+                CancelCapture();
                 notice = L("Lost the pen - try again.", "A caneta perdeu-se - tenta outra vez.");
             }
             else if (now >= captureEnd)
             {
-                capture = Capture.None;
+                CancelCapture();
                 notice = L("No gesture detected - try again.", "Nenhum gesto detetado - tenta outra vez.");
             }
         }
@@ -196,6 +209,8 @@ public class DuelController : MonoBehaviour
 
     private void Review(AttackDirection direction)
     {
+        pendingCryPower = Match.CurrentSlot == GestureSlot.Attack ? warCry.PeakPower : 0;
+        warCry.End();
         pendingDirection = direction;
         capture = Capture.Review;
         reviewStart = Time.unscaledTime;
@@ -205,14 +220,37 @@ public class DuelController : MonoBehaviour
     private void ConfirmGesture()
     {
         if (capture != Capture.Review) return;
-        Match.Record(Match.CurrentPlayer, Match.CurrentSlot, pendingDirection);
+        Match.Record(Match.CurrentPlayer, Match.CurrentSlot, pendingDirection, pendingCryPower);
         Match.ConfirmStep();
         capture = Capture.None;
     }
 
     private void CancelCapture()
     {
+        if (warCry != null) warCry.End();
+        pendingCryPower = 0;
         capture = Capture.None;
+    }
+
+    private void UpdateWarCryAura()
+    {
+        for (int i = 0; i < 2; i++)
+        {
+            float power = Match.WarCryPower(i);
+            if (Match.Phase == DuelPhase.Record && Match.CurrentPlayer == i && Match.CurrentSlot == GestureSlot.Attack)
+                power = capture == Capture.Armed ? warCry.PeakPower : capture == Capture.Review ? pendingCryPower : 0;
+            if (Match.Phase == DuelPhase.Result || Match.Phase == DuelPhase.GameOver) power = 0;
+            manager.GetAvatar(i)?.SetWarCryPower(power);
+        }
+    }
+
+    private string CryFeedback()
+    {
+        if (Match.CurrentSlot != GestureSlot.Attack) return "";
+        float power = capture == Capture.Review ? pendingCryPower : warCry.PeakPower;
+        string level = capture == Capture.Armed ? $" | {warCry.Decibels:F0} dBFS | {warCry.Status}" : "";
+        return L($"\nWAR CRY: x{WarCryRules.Multiplier(power):F2} damage{level}. Shout while drawing!",
+            $"\nGRITO DE GUERRA: x{WarCryRules.Multiplier(power):F2} dano{level}. Grita enquanto desenhas!");
     }
 
     // ---------- Fight ----------
@@ -352,6 +390,7 @@ public class DuelController : MonoBehaviour
                 break;
             case DuelPhase.Record:
                 text = RecordPrompt();
+                if (!ArenaMenu.IsComputer(Match.CurrentPlayer)) text += CryFeedback();
                 break;
             case DuelPhase.Fight:
                 text = L("Both players are ready. Put the pen away and press FIGHT!",

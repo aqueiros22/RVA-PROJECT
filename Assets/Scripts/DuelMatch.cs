@@ -42,6 +42,8 @@ public sealed class DuelMatch
     private readonly int[] health = { 100, 100 };
     private readonly int[] blocks = { 0, 0 };
     private readonly Card[] cards = new Card[2];
+    private readonly float[] warCryPower = new float[2];
+    public float WarCryPower(int player) => warCryPower[player];
     private readonly HashSet<string> used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     // [player, slot]: the round's secret gestures
     private readonly AttackDirection?[,] gestures = new AttackDirection?[2, 2];
@@ -84,10 +86,12 @@ public sealed class DuelMatch
     }
 
     // Stores (or replaces, to redo) the gesture of the current step
-    public bool Record(int player, GestureSlot slot, AttackDirection direction)
+    public bool Record(int player, GestureSlot slot, AttackDirection direction, float cryPower = 0f)
     {
         if (Phase != DuelPhase.Record || player != CurrentPlayer || slot != CurrentSlot) return false;
         gestures[player, (int)slot] = direction;
+        if (slot == GestureSlot.Attack)
+            warCryPower[player] = float.IsNaN(cryPower) ? 0f : Math.Max(0f, Math.Min(1f, cryPower));
         return true;
     }
 
@@ -112,7 +116,7 @@ public sealed class DuelMatch
             AttackDirection direction = gestures[attacker, (int)GestureSlot.Attack].Value;
             AttackDirection defense = gestures[defender, (int)GestureSlot.Defense].Value;
             bool blocked = direction == defense;
-            int damage = CalculateDamage(cards[attacker], cards[defender], blocked);
+            int damage = CalculateDamage(cards[attacker], cards[defender], blocked, warCryPower[attacker]);
             if (blocked) blocks[defender]++;
             health[defender] = Math.Max(0, health[defender] - damage);
             exchanges.Add(new Exchange(attacker, direction, defense, blocked, damage, health[defender]));
@@ -149,6 +153,7 @@ public sealed class DuelMatch
             if (cards[i] != null) used.Add(cards[i].id);
             cards[i] = null;
             gestures[i, 0] = gestures[i, 1] = null;
+            warCryPower[i] = 0;
         }
         exchanges.Clear();
     }
@@ -161,11 +166,11 @@ public sealed class DuelMatch
         return -1;
     }
 
-    public static int CalculateDamage(Card attacker, Card defender, bool blocked)
+    public static int CalculateDamage(Card attacker, Card defender, bool blocked, float cryPower = 0f)
     {
         double multiplier = attacker.weaponClass == defender.weaponClass ? 1 :
             ((int)attacker.weaponClass + 1) % 3 == (int)defender.weaponClass ? 1.5 : 0.6;
         // Round halves up: 25 * 0.5 = 13, as specified in the rules.
-        return (int)Math.Round(attacker.damage * multiplier * (blocked ? defender.block : 1), MidpointRounding.AwayFromZero);
+        return (int)Math.Round(attacker.damage * multiplier * (blocked ? defender.block : 1) * WarCryRules.Multiplier(cryPower), MidpointRounding.AwayFromZero);
     }
 }

@@ -186,6 +186,14 @@ public class PlayerAvatar : MonoBehaviour
 
     public bool HasWeapon => equippedWeapon != null;
 
+    public void SetWarCryPower(float power)
+    {
+        if (equippedWeapon == null) return;
+        var aura = equippedWeapon.GetComponent<WarCryAura>();
+        if (aura == null && power > 0) aura = equippedWeapon.AddComponent<WarCryAura>();
+        if (aura != null) aura.Power = Mathf.Clamp01(power);
+    }
+
     // Puts a weapon in the right hand, replacing the current one
     public void Equip(GameObject weaponPrefab, float weaponBaseHeight, float heightFraction, Vector3 gripOffset, Quaternion gripRotation)
     {

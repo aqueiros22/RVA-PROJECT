@@ -134,6 +134,33 @@ public static class DuelMatchTests
         }
         Check(tiebreak.Phase == DuelPhase.GameOver && tiebreak.Winner == 0, "Complete match decided by blocks");
         Check(tiebreak.Blocks(0) == 3 && tiebreak.Blocks(1) == 0, "Blocks credited to defender only");
+        Check(WarCryRules.Power(-80) == 0 && WarCryRules.Power(-35) == 0, "Silence and threshold give no cry bonus");
+        Check(Math.Abs(WarCryRules.Power(-21.5f) - 0.5f) < 0.001f, "Decibels scale cry power linearly");
+        Check(WarCryRules.Power(0) == 1 && WarCryRules.Power(float.NaN) == 0, "Cry power bounded and NaN safe");
+        Check(DuelMatch.CalculateDamage(sword, sword, false, 1) == 2 * DuelMatch.CalculateDamage(sword, sword, false), "Full cry doubles damage");
+        Check(DuelMatch.CalculateDamage(Card("sword", WeaponClass.Light, 25, .5),
+            Card("sword2", WeaponClass.Light, 25, .5), true, 1) == 25, "Cry and block applied before rounding");
+        var cry = new DuelMatch();
+        cry.Equip(0, Card("sword", WeaponClass.Light, 20, .5));
+        cry.Equip(1, Card("sword2", WeaponClass.Light, 20, .5));
+        Check(!cry.Record(1, GestureSlot.Attack, AttackDirection.Up, 1) && cry.WarCryPower(1) == 0, "Out of turn cannot charge cry");
+        Check(cry.Record(0, GestureSlot.Attack, AttackDirection.Up, 1), "Store attack cry");
+        cry.Record(0, GestureSlot.Attack, AttackDirection.Up, .5f);
+        Check(cry.WarCryPower(0) == .5f, "Redo replaces cry power");
+        cry.ConfirmStep();
+        cry.Record(1, GestureSlot.Defense, AttackDirection.Down, 1);
+        Check(cry.WarCryPower(1) == 0, "Defense cannot gain cry power");
+        cry.ConfirmStep();
+        cry.Record(1, GestureSlot.Attack, AttackDirection.Down, 1);
+        cry.ConfirmStep();
+        cry.Record(0, GestureSlot.Defense, AttackDirection.Up);
+        cry.ConfirmStep();
+        cry.Fight();
+        Check(cry.Exchanges[0].damage == 30 && cry.Exchanges[1].damage == 40, "Independent cries affect actual exchanges");
+        cry.FinishClash();
+        cry.Continue();
+        Check(cry.WarCryPower(0) == 0 && cry.WarCryPower(1) == 0, "Cry resets between rounds");
+
         Console.WriteLine($"PASS: {assertions} assertions");
         return 0;
     }
