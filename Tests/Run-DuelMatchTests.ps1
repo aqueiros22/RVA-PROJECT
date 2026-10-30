@@ -10,6 +10,7 @@ $arenaArgs = @('-nologo', '-target:exe', '-nostdlib+', ('-out:"' + (Join-Path $a
 $arenaArgs += @('System.Private.CoreLib.dll', 'System.Runtime.dll', 'System.Console.dll', 'System.Collections.dll') | ForEach-Object { '-r:"' + (Join-Path $arenaFramework.FullName $_) + '"' }
 $arenaArgs += '"' + (Join-Path $arenaRoot 'Assets/Scripts/DuelMatch.cs') + '"'
 $arenaArgs += '"' + (Join-Path $arenaRoot 'Assets/Scripts/PenStroke.cs') + '"'
+$arenaArgs += '"' + (Join-Path $arenaRoot 'Assets/Scripts/WarCryRules.cs') + '"'
 $arenaArgs += '"' + (Join-Path $PSScriptRoot 'DuelMatchTests.cs') + '"'
 $arenaResponse = Join-Path $arenaTemp 'tests.rsp'
 Set-Content -LiteralPath $arenaResponse -Value $arenaArgs

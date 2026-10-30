@@ -185,6 +185,8 @@ public class PlayerAvatar : MonoBehaviour
     }
 
     public bool HasWeapon => equippedWeapon != null;
+    // Chest height, where the hit numbers start floating from
+    public Vector3 HitPoint => transform.TransformPoint(new Vector3(0f, labelHeight * 0.6f, 0f));
 
     public void SetWarCryPower(float power)
     {
@@ -286,7 +288,7 @@ public class PlayerAvatar : MonoBehaviour
         label.font = font;
         label.GetComponent<MeshRenderer>().sharedMaterial = font.material;
         label.fontSize = 64;
-        label.characterSize = 0.04f;
+        label.characterSize = 0.028f;
         label.fontStyle = FontStyle.Bold;
         label.anchor = TextAnchor.LowerCenter;
         label.alignment = TextAlignment.Center;
@@ -297,8 +299,8 @@ public class PlayerAvatar : MonoBehaviour
                 healthSprite = Sprite.Create(Texture2D.whiteTexture, new Rect(0, 0, 1, 1), new Vector2(0.5f, 0.5f), 1);
             var background = new GameObject("Health Bar");
             background.transform.SetParent(label.transform, false);
-            background.transform.localPosition = new Vector3(0, -0.1f, 0);
-            background.transform.localScale = new Vector3(0.9f, 0.055f, 1);
+            background.transform.localPosition = new Vector3(0, -0.07f, 0);
+            background.transform.localScale = new Vector3(0.75f, 0.06f, 1);
             var backgroundRenderer = background.AddComponent<SpriteRenderer>();
             backgroundRenderer.sprite = healthSprite;
             backgroundRenderer.color = new Color(0.3f, 0.08f, 0.08f);
@@ -330,7 +332,8 @@ public class PlayerAvatar : MonoBehaviour
         {
             // Shown health only drops when the blade connects in the clash
             int hp = duel.ShownHealth(playerIndex);
-            label.text = PlayerProfiles.Instance.Get(playerIndex).name + $"\n{hp} / 100 HP";
+            // The bar alone shows the health
+            label.text = PlayerProfiles.Instance.Get(playerIndex).name;
             label.color = hp <= 25 ? Color.red : labelColor;
             if (healthFill != null)
             {

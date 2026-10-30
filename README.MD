@@ -20,16 +20,16 @@ Both decks are identical, so neither player gets luckier cards. Having only one 
 Gestures are **recorded first, in secret**, and the fight only plays when someone presses **FIGHT**.
 
 1. **Pick:** both players place one of their chosen cards face down and flip it at the same time. A card is only detected once it is face up, so the reveal happens automatically. Then each player slides their card next to their own character to equip it (Player A's cards only equip on `PLAYER 1`, Player B's on `PLAYER 2`). Keep only the cards in play on the table: the phone tracks at most 5 cards at once.
-2. **Record, taking turns** (the player who is not recording looks away), one gesture per step:
-   1. First attacker: **attack**.
-   2. The other player: **defense** (the direction they guess the attack comes from).
-   3. The other player: **attack**.
-   4. First attacker: **defense**.
+2. **Record, one player after the other** (the player who is not recording looks away):
+   1. First attacker: **attack**, then **defense** (the direction they guess the other's attack comes from).
+   2. The other player: **attack**, then **defense**.
 
-   Each gesture: press **Detect pen** → hold the pen tip inside the square in the middle of the screen during the 3-2-1 → *"DRAG!"* → drag the pen up, down, left or right (any speed). The recorded stroke is shown as an animated dotted arrow → **Redo** or **Confirm**, then pass the pen.
+   The pen only changes hands once per round. Shout while drawing an attack: the **war cry** adds up to ×1.5 damage and is played back when that attack swings (see `Docs/WarCry.md`).
+
+   Each gesture: press **Detect pen** → hold the pen tip inside the square in the middle of the screen during the 3-2-1 → *"DRAG!"* → drag the pen up, down, left or right (any speed). The recorded stroke is shown as an animated dotted arrow → **Redo** or **Confirm**.
 3. **FIGHT:** a big *"ROUND n — FIGHT!"* button. Put the pen away and press it.
-4. **Clash:** the first attacker swings, then the other one (a K.O. cancels the counterattack). A defender who guessed the direction holds a block (vertical swing) or a crouch (side swing) for the whole swing. HP drops when the blade connects.
-5. **Result:** both attacks with their damage → **Next round**. The cards used this round are out of the game.
+4. **Clash:** the first attacker swings, then the other one (a K.O. cancels the counterattack). A defender who guessed the direction holds a block (vertical swing) or a crouch (side swing) for the whole swing. HP drops when the blade connects, and the damage floats up from the defender (yellow → red with the amount), tagged **CRITICAL!** (class advantage), **Not very effective...** (disadvantage), **BLOCKED** or **K.O.!**.
+5. **Next round** button. The cards used this round are out of the game. A **K.O.** shows a big *K.O.!* and ends the game at once; after round 3 the winner is announced in the middle of the screen.
 
 ## Who attacks first
 - Round 1: Player A.
@@ -44,16 +44,17 @@ The first attacker also records first.
 
 ## Damage
 
-**Damage = base damage × class multiplier × block**
+**Damage = base damage × class multiplier × block × war cry**
 
 | Weapon | Class | Base damage | Damage that gets through when blocked |
 |---|---|---|---|
-| Sword, Dagger | Light | 20 | 40% |
-| Axe, Hammer | Heavy | 25 | 50% |
-| Shield | Defense | 10 | 10% |
+| Sword, Dagger | Light | 40 | 40% |
+| Axe, Hammer | Heavy | 50 | 50% |
+| Shield | Defense | 20 | 10% |
 
 - **Base damage** comes from the attacker's weapon.
 - **Block** comes from the defender's weapon, and only applies if the defense direction **matches** the attack direction.
+- **War cry**: ×1 (silent) to ×1.5 (full shout) from the attacker's microphone level.
 
 **Class multiplier** (attacker's weapon against the defender's weapon):
 - **×1.5** with advantage: Light → Heavy, Heavy → Defense, Defense → Light.
@@ -63,10 +64,10 @@ The first attacker also records first.
 Damage is rounded to the nearest whole number.
 
 **Examples**
-- Axe vs Shield, not blocked: 25 × 1.5 = **38**.
-- Sword vs Shield, blocked: 20 × 0.6 × 10% = **1**.
-- Shield vs Sword, not blocked: 10 × 1.5 = **15**.
-- Hammer vs Axe, blocked: 25 × 1 × 50% = **13**.
+- Axe vs Shield, not blocked: 50 × 1.5 = **75**.
+- Sword vs Shield, blocked: 40 × 0.6 × 10% = **2**.
+- Shield vs Sword, not blocked: 20 × 1.5 = **30**.
+- Hammer vs Axe, blocked: 50 × 1 × 50% = **25**.
 
 ## Roadmap
 
@@ -111,21 +112,22 @@ Damage is rounded to the nearest whole number.
 - [x] Health (100 HP) for each player, with a health bar above the character next to the name label.
 - [x] Damage calculation (base damage × class multiplier × block), as described in **Damage**.
 - [x] Defense gesture: the pen gesture is stored as the defender's block direction.
-- [x] Hit result on screen: "Blocked!" or "Hit!" plus the damage, with the defender holding a guard (`StartGuard`/`EndGuard`) on a block and `PlayDeath` at 0 HP.
+- [x] Hit result floating from the defender: the damage plus CRITICAL! / Not very effective... / BLOCKED / K.O.!, with the defender holding a guard (`StartGuard`/`EndGuard`) on a block and `PlayDeath` at 0 HP.
 - [ ] Test and tune the red-tip pen on a real device.
 
 ### 3. Turn and round flow
-- [x] Game state machine: pick weapons → A records → B records → FIGHT → clash → next round → game over (see phase 6).
+- [x] Game state machine: pick weapons → A records attack + defense → B records attack + defense → FIGHT → clash → next round → game over (see phase 6).
 - [x] On-screen prompts for each step ("Player A: record your attack and your defense. Player B, don't look!", …).
 - [x] The pen panel is hidden in the duel, so no direction is ever shown.
 - [x] Remove the "Switch player" button: the game decides whose turn it is.
 - [x] Turn order: A first in round 1, B in round 2, the player with less HP in round 3.
 - [x] Cards used in a round can't be equipped again in the same game.
 - [x] Each deck only equips onto its own character: cards without "2" on `PLAYER 1`, II cards on `PLAYER 2`.
-- [x] Game over screen: winner by KO or by HP, tie-break by blocks, then draw. "Play again" button.
+- [x] Game over screen: a big K.O.! (winner named below) or "X wins!" by HP, tie-break by blocks, then draw. "Play again" and "Main menu" buttons, no extra result screen.
 
 ### 4. Feedback and polish
-- [ ] Floating damage numbers and a spark effect on a block.
+- [x] Floating damage numbers (`FloatingCombatText`), coloured by damage, with CRITICAL / Not very effective / BLOCKED / K.O. tags.
+- [ ] Spark effect on a block.
 - [ ] Hit reaction animation on the defender.
 - [ ] Sound per weapon (swing, hit, block).
 - [ ] Short in-game tutorial / rules screen.
@@ -142,12 +144,13 @@ Feedback from the first phone test. Full plan and status: [Docs/Playtest1_Improv
 - [x] Clash choreography (`ClashDirector`): wind-up, slower swings (×0.7, heavy weapons slower still), the defender's block/crouch held for the whole swing, a short hit-stop on impact, HP drops when the blade connects.
 - [x] At most 5 cards tracked at once (performance on the phone).
 - [ ] Test on the phone (pen capture window, countdown, speeds).
-- [ ] Game feel: sound effects, announcer, background music, hit/block particles, floating damage numbers, vibration (covers phase 4).
+- [x] Sound effects and music (`GameAudio`): menu and duel music, clicks, 3-2-1, swing, hit, block, K.O., victory, equip. Files and names in `Assets/Resources/Audio/README.md`.
+- [ ] Game feel: announcer, hit/block particles, vibration (covers phase 4).
 - [ ] Hit-reaction animation (needs a Mixamo "Hit Reaction" clip).
 - [x] Colour calibration on the phone, mirror X / flip Y, saved settings (Marko's tracker).
 - [x] Pen square: **Detect pen** → 3-2-1 with the pen held in a square → drag in any direction at any speed (`PenStroke`). Replaces the fast-swipe window.
 - [x] The recorded stroke is shown as an animated dotted arrow before **Confirm**.
-- [x] Alternating recording: A attack → B defense → B attack → A defense.
+- [x] Recording per player: A attack → A defense → B attack → B defense (the pen changes hands once).
 - [x] Cleaner HUD: no top status panels (health stays above each character), buttons left/right of the prompt, small round counter.
 - [x] Class legend (Light ► Heavy ► Defense ► Light) during the pick, explaining the green/red icons on the cards.
 - [x] Green/red screen flash when a blade blocks or hits.
@@ -160,9 +163,9 @@ Feedback from the first phone test. Full plan and status: [Docs/Playtest1_Improv
 
 ## Turn-flow implementation and validation
 
-`DuelMatch` holds the three-round rules, health, blocks, card ownership, consumed cards and each round's secret gestures (four alternating `Record` → `ConfirmStep` steps → `Fight` resolves both attacks → `FinishClash` → `Continue`). `DuelController` starts after player customization and controls the HUD, the Detect pen / Redo / Confirm capture (it reads `ColorGestureTracker.Tip` and classifies the stroke with `PenStroke`) and the FIGHT button; `ClashDirector` plays the animations. A card locks when equipped; both players must equip before recording starts. Choose your three-card hand physically before the match, as in Setup above. Both player cards must be visible to press FIGHT.
+`DuelMatch` holds the three-round rules, health, blocks, card ownership, consumed cards and each round's secret gestures (four `Record` → `ConfirmStep` steps, attack then defense for each player → `Fight` resolves both attacks → `FinishClash` → `Continue`). `DuelController` starts after player customization and controls the HUD, the Detect pen / Redo / Confirm capture (it reads `ColorGestureTracker.Tip` and classifies the stroke with `PenStroke`) and the FIGHT button; `ClashDirector` plays the animations. A card locks when equipped; both players must equip before recording starts. Choose your three-card hand physically before the match, as in Setup above. Both player cards must be visible to press FIGHT.
 
-Health bars appear above the characters; they only drop when the blade connects. The prompt names the player recording and the one who must look away. The recorded direction is shown only to the player who drew it, before Confirm. **Play again** resets HP, blocks and used cards, keeping the customized characters.
+Health bars (no numbers) appear under each name above the characters; they only drop when the blade connects. The prompt is a short headline ("Ana: draw your attack") with a small line under it ("Bruno, don't look!"). During the duel the player characters stay put when a hand covers their card: a covered or jumping card is placed from the other player card, or frozen if both are covered (`CardWeaponManager`, *Duel stability*). The recorded direction is shown only to the player who drew it, before Confirm. **Play again** resets HP, blocks and used cards, keeping the customized characters.
 
 Run the standalone rules tests without a .NET SDK using Unity's bundled compiler/runtime:
 

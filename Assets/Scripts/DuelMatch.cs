@@ -4,7 +4,7 @@ using System.Collections.Generic;
 public enum WeaponClass { Light, Heavy, Defense }
 public enum AttackDirection { Up, Down, Left, Right }
 public enum GestureSlot { Attack, Defense }
-// Pick weapons -> the players take turns recording in secret (A attack, B defense, B attack, A defense) -> FIGHT -> clash -> result
+// Pick weapons -> each player records in secret their attack and defense (A attack, A defense, B attack, B defense) -> FIGHT -> clash -> result
 public enum DuelPhase { Pick, Record, Fight, Clash, Result, GameOver }
 
 // Pure rules: tracking, UI and animation cannot change the turn order or damage.
@@ -31,11 +31,14 @@ public sealed class DuelMatch
         public readonly bool blocked;
         public readonly int damage;
         public readonly int defenderHealth;
+        // 1.5 with class advantage (critical), 0.6 at a disadvantage (not very effective), 1 otherwise
+        public readonly double classMultiplier;
         public int Defender => 1 - attacker;
-        public Exchange(int attacker, AttackDirection direction, AttackDirection defense, bool blocked, int damage, int defenderHealth)
+        public Exchange(int attacker, AttackDirection direction, AttackDirection defense, bool blocked, int damage, int defenderHealth, double classMultiplier = 1)
         {
             this.attacker = attacker; this.direction = direction; this.defense = defense;
             this.blocked = blocked; this.damage = damage; this.defenderHealth = defenderHealth;
+            this.classMultiplier = classMultiplier;
         }
     }
 
@@ -51,11 +54,11 @@ public sealed class DuelMatch
     public int Round { get; private set; } = 1;
     // Attacks first in this round's clash, and records first
     public int FirstAttacker { get; private set; }
-    // Record phase: 0 first attacker's attack, 1 the other's defense, 2 the other's attack, 3 first attacker's defense
+    // Record phase: 0-1 first attacker's attack and defense, 2-3 the other's attack and defense
     public int Step { get; private set; }
     public const int Steps = 4;
-    public int CurrentPlayer => Step == 0 || Step == 3 ? FirstAttacker : 1 - FirstAttacker;
-    public GestureSlot CurrentSlot => Step == 0 || Step == 2 ? GestureSlot.Attack : GestureSlot.Defense;
+    public int CurrentPlayer => Step < 2 ? FirstAttacker : 1 - FirstAttacker;
+    public GestureSlot CurrentSlot => Step % 2 == 0 ? GestureSlot.Attack : GestureSlot.Defense;
     public DuelPhase Phase { get; private set; } = DuelPhase.Pick;
     public IReadOnlyList<Exchange> Exchanges => exchanges;
     public int Winner { get; private set; } = -1;
@@ -119,7 +122,8 @@ public sealed class DuelMatch
             int damage = CalculateDamage(cards[attacker], cards[defender], blocked, warCryPower[attacker]);
             if (blocked) blocks[defender]++;
             health[defender] = Math.Max(0, health[defender] - damage);
-            exchanges.Add(new Exchange(attacker, direction, defense, blocked, damage, health[defender]));
+            double classMultiplier = ClassMultiplier(cards[attacker].weaponClass, cards[defender].weaponClass);
+            exchanges.Add(new Exchange(attacker, direction, defense, blocked, damage, health[defender], classMultiplier));
             if (health[defender] == 0) break;
         }
         Phase = DuelPhase.Clash;
@@ -166,10 +170,13 @@ public sealed class DuelMatch
         return -1;
     }
 
+    // Light > Heavy > Defense > Light
+    public static double ClassMultiplier(WeaponClass attacker, WeaponClass defender) =>
+        attacker == defender ? 1 : ((int)attacker + 1) % 3 == (int)defender ? 1.5 : 0.6;
+
     public static int CalculateDamage(Card attacker, Card defender, bool blocked, float cryPower = 0f)
     {
-        double multiplier = attacker.weaponClass == defender.weaponClass ? 1 :
-            ((int)attacker.weaponClass + 1) % 3 == (int)defender.weaponClass ? 1.5 : 0.6;
+        double multiplier = ClassMultiplier(attacker.weaponClass, defender.weaponClass);
         // Round halves up: 25 * 0.5 = 13, as specified in the rules.
         return (int)Math.Round(attacker.damage * multiplier * (blocked ? defender.block : 1) * WarCryRules.Multiplier(cryPower), MidpointRounding.AwayFromZero);
     }

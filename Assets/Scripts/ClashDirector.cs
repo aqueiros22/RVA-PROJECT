@@ -39,6 +39,7 @@ public class ClashDirector : MonoBehaviour
             yield return new WaitForSecondsRealtime(windUp);
 
             bool swung = attacker != null && attacker.TryAttack(exchange.direction, swingSpeed);
+            GameAudio.Play("swing");
             // The guard goes up with the swing and stays up until it ends
             if (exchange.blocked && defender != null) defender.StartGuard(exchange.direction);
 

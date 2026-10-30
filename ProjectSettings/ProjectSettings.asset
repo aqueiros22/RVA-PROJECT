@@ -571,7 +571,8 @@ PlayerSettings:
   enableCrashReportAPI: 0
   cameraUsageDescription: 
   locationUsageDescription: 
-  microphoneUsageDescription: ARena Clash uses microphone volume during attack gestures to power your War Cry. Audio is not saved.
+  microphoneUsageDescription: ARena Clash uses microphone volume during attack gestures
+    to power your War Cry. Audio is not saved.
   bluetoothUsageDescription: 
   macOSTargetOSVersion: 12.0
   switchNMETAOverride: 

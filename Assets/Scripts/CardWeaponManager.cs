@@ -62,6 +62,15 @@ public class CardWeaponManager : MonoBehaviour
     // How long to keep showing the weapon after the card stops being fully tracked
     public float lostTrackingGraceTime = 0.4f;
 
+    [Header("Duel stability (player cards on the table)")]
+    // A tracked pose further than this from the character (in card lengths, or degrees) is a glitch...
+    public float jumpTolerance = 0.3f;
+    public float jumpAngle = 25f;
+    // ...unless it lasts this long: then the card really moved
+    public float jumpAcceptTime = 0.5f;
+    // Multiplies the smoothing while the duel is on (lower = steadier)
+    [Range(0.1f, 1f)] public float holdSmoothing = 0.5f;
+
     [Header("Debug")]
     // Shows AR session and card tracking state on screen
     public bool showDebugInfo = true;
@@ -81,9 +90,20 @@ public class CardWeaponManager : MonoBehaviour
         public SpawnedWeapon equipTarget;    // weapons only: player it is being equipped to
         public float equipProgress;
         public LineRenderer ring;
+        // Players during the duel: this frame's goal pose, and whether it can be trusted
+        public bool holdGood;
+        public Vector3 holdPosition;
+        public Quaternion holdRotation;
+        public float holdScale;
+        public float jumpSince = -1f;
     }
 
     private readonly Dictionary<int, SpawnedWeapon> spawnedWeapons = new Dictionary<int, SpawnedWeapon>();
+    private readonly List<SpawnedWeapon> heldPlayers = new List<SpawnedWeapon>();
+    // Player B's pose in player A's card frame, while both cards are seen during the duel
+    private bool hasRelative;
+    private Vector3 relativePosition;
+    private Quaternion relativeRotation = Quaternion.identity;
     private readonly Dictionary<GameObject, float> prefabHeights = new Dictionary<GameObject, float>();
 
     private PlayerSetupUI playerSetup;
@@ -281,6 +301,9 @@ public class CardWeaponManager : MonoBehaviour
     void Update()
     {
         float now = Time.time;
+        bool hold = Duel != null && Duel.HoldsCards;
+        heldPlayers.Clear();
+        if (!hold) hasRelative = false;
 
         foreach (var weapon in spawnedWeapons.Values)
         {
@@ -291,12 +314,17 @@ public class CardWeaponManager : MonoBehaviour
             }
 
             // Moving cards require direct observation, not an extended last-known pose.
-            if (image.TargetStatus.Status == Status.TRACKED)
+            bool tracked = image.TargetStatus.Status == Status.TRACKED;
+            if (tracked)
             {
                 weapon.lastTrackedTime = now;
             }
 
-            bool visible = weapon.lastTrackedTime >= 0f && now - weapon.lastTrackedTime <= lostTrackingGraceTime;
+            bool recent = weapon.lastTrackedTime >= 0f && now - weapon.lastTrackedTime <= lostTrackingGraceTime;
+            // Once the cards are down (recording, fight), a hand or the pen covering a player card
+            // must not make the character vanish or jump: see UpdateHeldPlayers
+            bool held = weapon.isPlayer && weapon.placed && hold;
+            bool visible = recent || held;
             weapon.visible = visible;
             // An equipped weapon lives in the player's hand, not on its card
             bool showModel = !SetupInProgress && visible && (weapon.isPlayer || (weapon.equippedTo == null && !Duel.IsUsed(image.TargetName)));
@@ -310,9 +338,19 @@ public class CardWeaponManager : MonoBehaviour
                 weapon.placed = false;
                 continue;
             }
-
             float cardSize = Mathf.Max(image.GetSize().x, image.GetSize().y);
-            if (cardSize <= 0f)
+            if (held)
+            {
+                if (!weapon.instance.activeSelf) weapon.instance.SetActive(true);
+                heldPlayers.Add(weapon);
+                weapon.holdGood = false;
+                if (!tracked || cardSize <= 0f)
+                {
+                    weapon.jumpSince = -1f;
+                    continue;
+                }
+            }
+            else if (cardSize <= 0f)
             {
                 continue;
             }
@@ -329,6 +367,19 @@ public class CardWeaponManager : MonoBehaviour
             float targetScale = cardSize * heightPerCard / weapon.baseHeight;
 
             Transform t = weapon.instance.transform;
+            if (held)
+            {
+                // A hand half over the card makes the tracked pose leap: trust a big change only once it lasts
+                bool jump = Vector3.Distance(targetPosition, t.position) > jumpTolerance * cardSize ||
+                            Quaternion.Angle(targetRotation, t.rotation) > jumpAngle;
+                if (!jump) weapon.jumpSince = -1f;
+                else if (weapon.jumpSince < 0f) weapon.jumpSince = now;
+                weapon.holdGood = !jump || now - weapon.jumpSince >= jumpAcceptTime;
+                weapon.holdPosition = targetPosition;
+                weapon.holdRotation = targetRotation;
+                weapon.holdScale = targetScale;
+                continue;
+            }
             if (!weapon.placed)
             {
                 // Snap to the card the first time, then grow in
@@ -348,7 +399,58 @@ public class CardWeaponManager : MonoBehaviour
             t.localScale = Vector3.Lerp(t.localScale, Vector3.one * targetScale, 1f - Mathf.Exp(-scaleSmoothing * dt));
         }
 
+        if (hold) UpdateHeldPlayers();
         if (!SetupInProgress) UpdateEquipping();
+    }
+
+    // During the duel the two player cards stay put on the table. A player whose card is clearly
+    // tracked follows it; one that is covered or jumping is placed from the other card, keeping the
+    // spacing last seen between them; if both are covered, both stay where they are.
+    private void UpdateHeldPlayers()
+    {
+        SpawnedWeapon a = null, b = null;
+        foreach (var player in heldPlayers)
+        {
+            if (player.avatar != null && player.avatar.playerIndex == 1) b = player;
+            else a = player;
+        }
+
+        if (a != null && b != null && a.holdGood && b.holdGood)
+        {
+            Quaternion inverse = Quaternion.Inverse(a.holdRotation);
+            Vector3 position = inverse * (b.holdPosition - a.holdPosition);
+            Quaternion rotation = inverse * b.holdRotation;
+            // Averaged over a few frames, so one noisy frame does not bend the spacing
+            relativePosition = hasRelative ? Vector3.Lerp(relativePosition, position, 0.2f) : position;
+            relativeRotation = hasRelative ? Quaternion.Slerp(relativeRotation, rotation, 0.2f) : rotation;
+            hasRelative = true;
+        }
+        if (hasRelative && a != null && b != null)
+        {
+            if (!a.holdGood && b.holdGood)
+            {
+                a.holdRotation = b.holdRotation * Quaternion.Inverse(relativeRotation);
+                a.holdPosition = b.holdPosition - a.holdRotation * relativePosition;
+                a.holdGood = true;
+            }
+            else if (!b.holdGood && a.holdGood)
+            {
+                b.holdPosition = a.holdPosition + a.holdRotation * relativePosition;
+                b.holdRotation = a.holdRotation * relativeRotation;
+                b.holdGood = true;
+            }
+        }
+
+        float dt = Time.deltaTime;
+        foreach (var player in heldPlayers)
+        {
+            if (!player.holdGood) continue;
+            Transform t = player.instance.transform;
+            t.position = Vector3.Lerp(t.position, player.holdPosition, 1f - Mathf.Exp(-positionSmoothing * holdSmoothing * dt));
+            t.rotation = Quaternion.Slerp(t.rotation, player.holdRotation, 1f - Mathf.Exp(-rotationSmoothing * holdSmoothing * dt));
+            if (player.holdScale > 0f)
+                t.localScale = Vector3.Lerp(t.localScale, Vector3.one * player.holdScale, 1f - Mathf.Exp(-scaleSmoothing * dt));
+        }
     }
 
     private static float CardSize(ImageTargetBehaviour image)
@@ -451,6 +553,7 @@ public class CardWeaponManager : MonoBehaviour
         var grip = prefab.GetComponent<WeaponGrip>();
         player.Equip(prefab, GetPrefabHeight(prefab), equippedWeaponHeight,
             grip != null ? grip.offset : gripOffset, Quaternion.Euler(grip != null ? grip.rotation : gripRotation));
+        GameAudio.Play("equip");
         player.attackSpeed = stats.weaponClass == WeaponClass.Heavy ? 0.8f : 1f;
         return true;
     }
@@ -478,6 +581,7 @@ public class CardWeaponManager : MonoBehaviour
         Vector3 offset = grip != null ? grip.offset : gripOffset;
         Vector3 rotation = grip != null ? grip.rotation : gripRotation;
         player.avatar.Equip(weapon.prefab, weapon.baseHeight, equippedWeaponHeight, offset, Quaternion.Euler(rotation));
+        GameAudio.Play("equip");
         // Heavy weapons swing slower
         var stats = weapon.prefab.GetComponent<WeaponStats>();
         bool heavy = stats != null && stats.weaponClass == WeaponClass.Heavy;

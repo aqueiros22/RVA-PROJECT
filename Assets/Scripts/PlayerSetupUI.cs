@@ -126,7 +126,7 @@ public class PlayerSetupUI : MonoBehaviour
         preview.transform.SetParent(viewport.transform, false);
         var aspect = preview.GetComponent<AspectRatioFitter>();
         aspect.aspectMode = AspectRatioFitter.AspectMode.FitInParent;
-        aspect.aspectRatio = 768f / 1280f;
+        aspect.aspectRatio = 1024f / 1280f;
         preview.GetComponent<RawImage>().raycastTarget = false;
         BuildPreview(preview.GetComponent<RawImage>());
 
@@ -223,6 +223,7 @@ public class PlayerSetupUI : MonoBehaviour
     {
         var image = CreateImage(parent, "Button", ButtonColor);
         var button = image.gameObject.AddComponent<Button>();
+        button.onClick.AddListener(() => GameAudio.Play("click"));
         button.onClick.AddListener(onClick);
         var text = CreateText(image.transform, content, 30, TextAnchor.MiddleCenter);
         Stretch(text.rectTransform);
@@ -299,6 +300,7 @@ public class PlayerSetupUI : MonoBehaviour
             previewAvatar.playerIndex = currentPlayer;
             previewRoot.SetActive(true);
             previewAvatar.Apply();
+            FramePreview();
             previewCamera.gameObject.SetActive(true);
             title.text = Localization.Get(
                 $"Customize Player {currentPlayer + 1}",
@@ -357,14 +359,7 @@ public class PlayerSetupUI : MonoBehaviour
         previewAvatar.showNameLabel = false;
         previewAvatar.animatorController = manager != null ? manager.playerAnimator : null;
 
-        var renderers = previewRoot.GetComponentsInChildren<Renderer>();
-        Bounds bounds = new Bounds(previewRoot.transform.position + Vector3.up, new Vector3(1, 2, 1));
-        if (renderers.Length > 0)
-        {
-            bounds = renderers[0].bounds;
-            foreach (var renderer in renderers) bounds.Encapsulate(renderer.bounds);
-        }
-        previewTexture = new RenderTexture(768, 1280, 24);
+        previewTexture = new RenderTexture(1024, 1280, 24);
         previewTexture.Create();
         image.texture = previewTexture;
         var cameraObject = new GameObject("Setup Preview Camera", typeof(Camera));
@@ -375,17 +370,32 @@ public class PlayerSetupUI : MonoBehaviour
         previewCamera.backgroundColor = new Color(0.045f, 0.055f, 0.08f, 1f);
         previewCamera.targetTexture = previewTexture;
         previewCamera.orthographic = true;
-        previewCamera.orthographicSize = Mathf.Max(bounds.extents.y, bounds.extents.x / previewCamera.aspect) * 1.2f;
         previewCamera.nearClipPlane = 0.01f;
-        previewCamera.farClipPlane = Mathf.Max(20, bounds.size.z * 4);
-        cameraObject.transform.position = bounds.center - Vector3.forward * (bounds.extents.z + 5);
         cameraObject.transform.rotation = Quaternion.identity;
+        FramePreview();
         worldCamera = Camera.main;
         if (worldCamera != null)
         {
             worldCameraMask = worldCamera.cullingMask;
             worldCamera.cullingMask &= ~(1 << PreviewLayer);
         }
+    }
+
+    // Fills the preview with the character as it is dressed now: framed by its height only,
+    // so the arms or the whole armour set of the prefab do not shrink it
+    private void FramePreview()
+    {
+        if (previewRoot == null || previewCamera == null) return;
+        Bounds bounds = new Bounds(previewRoot.transform.position + Vector3.up, new Vector3(1, 2, 1));
+        bool first = true;
+        foreach (var renderer in previewRoot.GetComponentsInChildren<Renderer>())
+        {
+            if (first) { bounds = renderer.bounds; first = false; }
+            else bounds.Encapsulate(renderer.bounds);
+        }
+        previewCamera.orthographicSize = bounds.extents.y * 1.08f;
+        previewCamera.farClipPlane = Mathf.Max(20, bounds.size.z * 4);
+        previewCamera.transform.position = bounds.center - Vector3.forward * (bounds.extents.z + 5);
     }
 
     void OnDestroy()

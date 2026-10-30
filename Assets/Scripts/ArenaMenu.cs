@@ -13,6 +13,7 @@ public class ArenaMenu : MonoBehaviour
     public static bool IsComputer(int player) => Mode == ArenaMode.ComputerVsComputer ||
         (Mode == ArenaMode.PlayerVsComputer && player == 1);
     private GameObject root, home, modes;
+    private Text musicLabel, effectsLabel;
     private Font font;
 
     void Awake() { IsOpen = true; Mode = ArenaMode.PlayerVsPlayer; }
@@ -46,18 +47,43 @@ public class ArenaMenu : MonoBehaviour
         shade.transform.SetParent(root.transform, false);
         Fill(shade.GetComponent<RectTransform>());
         shade.GetComponent<Image>().color = new Color(0.015f, 0.025f, 0.05f, 0.58f);
-        Label(root.transform, "ARena <color=#FFCB71>Clash</color>", 78, 0.72f, 0.89f);
-        Label(root.transform, "YOUR TABLE. YOUR ARENA.", 20, 0.65f, 0.71f);
+        // Sized for a phone held sideways: big title, wide buttons a thumb can hit
+        Label(root.transform, "ARena <color=#FFCB71>Clash</color>", 110, 0.75f, 0.95f);
+        Label(root.transform, "YOUR TABLE. YOUR ARENA.", 30, 0.67f, 0.75f);
         home = Page("Main menu");
         modes = Page("Match modes");
-        Button(home.transform, "PLAY", 0.47f, () => { home.SetActive(false); modes.SetActive(true); });
-        Button(home.transform, "EXIT", 0.32f, Exit);
-        Label(modes.transform, "CHOOSE YOUR MATCH", 25, 0.56f, 0.63f);
-        Button(modes.transform, "P v P    ·    Player vs Player", 0.46f, () => Play(ArenaMode.PlayerVsPlayer));
-        Button(modes.transform, "P v C    ·    Player vs Computer", 0.32f, () => Play(ArenaMode.PlayerVsComputer));
-        Button(modes.transform, "C v C    ·    Computer vs Computer", 0.18f, () => Play(ArenaMode.ComputerVsComputer));
-        Button(modes.transform, "BACK", 0.04f, () => { modes.SetActive(false); home.SetActive(true); });
+        Button(home.transform, "PLAY", 0.44f, 0.15f, () => { home.SetActive(false); modes.SetActive(true); });
+        Button(home.transform, "EXIT", 0.25f, 0.15f, Exit);
+        // Sound switches, remembered between sessions
+        musicLabel = Button(home.transform, "", 0.05f, 0.13f, ToggleMusic, 0.2f, 0.49f);
+        effectsLabel = Button(home.transform, "", 0.05f, 0.13f, ToggleEffects, 0.51f, 0.8f);
+        RefreshSoundLabels();
+        Label(modes.transform, "CHOOSE YOUR MATCH", 36, 0.58f, 0.66f);
+        Button(modes.transform, "P v P    ·    Player vs Player", 0.43f, 0.14f, () => Play(ArenaMode.PlayerVsPlayer));
+        Button(modes.transform, "P v C    ·    Player vs Computer", 0.28f, 0.14f, () => Play(ArenaMode.PlayerVsComputer));
+        Button(modes.transform, "C v C    ·    Computer vs Computer", 0.13f, 0.14f, () => Play(ArenaMode.ComputerVsComputer));
+        Button(modes.transform, "BACK", 0.015f, 0.1f, () => { modes.SetActive(false); home.SetActive(true); }, 0.35f, 0.65f);
         modes.SetActive(false);
+    }
+
+    private void ToggleMusic()
+    {
+        GameAudio.MusicEnabled = !GameAudio.MusicEnabled;
+        RefreshSoundLabels();
+    }
+
+    private void ToggleEffects()
+    {
+        GameAudio.EffectsEnabled = !GameAudio.EffectsEnabled;
+        RefreshSoundLabels();
+        // Let the player hear that sound is back
+        GameAudio.Play("click");
+    }
+
+    private void RefreshSoundLabels()
+    {
+        musicLabel.text = GameAudio.MusicEnabled ? "MUSIC: ON" : "MUSIC: OFF";
+        effectsLabel.text = GameAudio.EffectsEnabled ? "SOUND FX: ON" : "SOUND FX: OFF";
     }
 
     private GameObject Page(string name)
@@ -92,28 +118,31 @@ public class ArenaMenu : MonoBehaviour
 #endif
     }
 
-    private void Button(Transform parent, string text, float y, UnityEngine.Events.UnityAction action)
+    // y and height are fractions of the screen height; left/right of its width
+    private Text Button(Transform parent, string text, float y, float height, UnityEngine.Events.UnityAction action,
+        float left = 0.2f, float right = 0.8f)
     {
         var go = new GameObject(text, typeof(RectTransform), typeof(Image), typeof(Button));
         go.transform.SetParent(parent, false);
         var rect = go.GetComponent<RectTransform>();
-        rect.anchorMin = new Vector2(0.28f, y);
-        rect.anchorMax = new Vector2(0.72f, y + 0.105f);
+        rect.anchorMin = new Vector2(left, y);
+        rect.anchorMax = new Vector2(right, y + height);
         rect.offsetMin = rect.offsetMax = Vector2.zero;
         go.GetComponent<Image>().color = new Color(0.12f, 0.19f, 0.26f, 0.96f);
         var outline = go.AddComponent<Outline>();
         outline.effectColor = new Color(0.95f, 0.68f, 0.3f, 0.85f);
         outline.effectDistance = new Vector2(2, -2);
         var button = go.GetComponent<Button>();
+        button.onClick.AddListener(() => GameAudio.Play("click"));
         button.onClick.AddListener(action);
         var colors = button.colors;
         colors.highlightedColor = new Color(1f, 0.8f, 0.45f);
         colors.pressedColor = new Color(0.7f, 0.5f, 0.25f);
         button.colors = colors;
-        Label(go.transform, text, 30, 0, 1);
+        return Label(go.transform, text, 44, 0, 1);
     }
 
-    private void Label(Transform parent, string content, int size, float bottom, float top)
+    private Text Label(Transform parent, string content, int size, float bottom, float top)
     {
         var go = new GameObject("Label", typeof(RectTransform), typeof(Text));
         go.transform.SetParent(parent, false);
@@ -131,6 +160,7 @@ public class ArenaMenu : MonoBehaviour
         text.alignment = TextAnchor.MiddleCenter;
         text.color = new Color(1f, 0.94f, 0.82f);
         text.raycastTarget = false;
+        return text;
     }
 
     private static void Fill(RectTransform rect)

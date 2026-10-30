@@ -10,7 +10,7 @@ public static class DuelMatchTests
     }
     private static DuelMatch.Card Card(string id, WeaponClass type, int damage, double block) => new DuelMatch.Card(id, type, damage, block);
 
-    // The players record in alternating steps; each defender guesses right when block[defender] is true. Then FIGHT.
+    // Each player records their attack then their defense; each defender guesses right when block[defender] is true. Then FIGHT.
     private static void PlayRound(DuelMatch match, bool blockA, bool blockB)
     {
         bool[] block = { blockA, blockB };
@@ -19,11 +19,11 @@ public static class DuelMatchTests
         Check(!match.Record(second, GestureSlot.Attack, AttackDirection.Up), "Only the current player can record");
         Check(!match.Record(first, GestureSlot.Defense, AttackDirection.Up), "Only the current slot can be recorded");
         Check(!match.ConfirmStep(), "Cannot confirm without a gesture");
-        var order = new[] { (first, GestureSlot.Attack), (second, GestureSlot.Defense), (second, GestureSlot.Attack), (first, GestureSlot.Defense) };
+        var order = new[] { (first, GestureSlot.Attack), (first, GestureSlot.Defense), (second, GestureSlot.Attack), (second, GestureSlot.Defense) };
         for (int step = 0; step < order.Length; step++)
         {
             var (player, slot) = order[step];
-            Check(match.Step == step && match.CurrentPlayer == player && match.CurrentSlot == slot, "Alternating step order");
+            Check(match.Step == step && match.CurrentPlayer == player && match.CurrentSlot == slot, "Attack then defense, one player after the other");
             // Attacks always go Up; a matching defense is Up, a wrong one Down
             AttackDirection direction = slot == GestureSlot.Attack || block[player] ? AttackDirection.Up : AttackDirection.Down;
             Check(match.Record(player, slot, AttackDirection.Left), "Record gesture");
@@ -59,19 +59,21 @@ public static class DuelMatchTests
     public static int Main()
     {
         StrokeTests();
-        var axe = Card("axe", WeaponClass.Heavy, 25, .5);
-        var hammer = Card("hammer", WeaponClass.Heavy, 25, .5);
-        var sword = Card("sword", WeaponClass.Light, 20, .4);
-        var shield = Card("shield", WeaponClass.Defense, 10, .1);
-        Check(DuelMatch.CalculateDamage(axe, shield, false) == 38, "Axe vs shield = 38");
-        Check(DuelMatch.CalculateDamage(sword, shield, true) == 1, "Sword vs shield blocked = 1");
-        Check(DuelMatch.CalculateDamage(shield, sword, false) == 15, "Shield vs sword = 15");
-        Check(DuelMatch.CalculateDamage(hammer, axe, true) == 13, "Half damage rounds up to 13");
+        var axe = Card("axe", WeaponClass.Heavy, 50, .5);
+        var hammer = Card("hammer", WeaponClass.Heavy, 50, .5);
+        var sword = Card("sword", WeaponClass.Light, 40, .4);
+        var shield = Card("shield", WeaponClass.Defense, 20, .1);
+        Check(DuelMatch.CalculateDamage(axe, shield, false) == 75, "Axe vs shield = 75");
+        Check(DuelMatch.CalculateDamage(sword, shield, true) == 2, "Sword vs shield blocked = 2");
+        Check(DuelMatch.CalculateDamage(shield, sword, false) == 30, "Shield vs sword = 30");
+        Check(DuelMatch.CalculateDamage(hammer, axe, true) == 25, "Hammer vs axe blocked = 25");
+        Check(DuelMatch.CalculateDamage(Card("h", WeaponClass.Heavy, 25, .5), Card("h2", WeaponClass.Heavy, 25, .5), true) == 13, "Half damage rounds up to 13");
         foreach (WeaponClass a in Enum.GetValues(typeof(WeaponClass)))
         foreach (WeaponClass d in Enum.GetValues(typeof(WeaponClass)))
         {
             int expected = a == d ? 20 : ((int)a + 1) % 3 == (int)d ? 30 : 12;
             Check(DuelMatch.CalculateDamage(Card("a", a, 20, .4), Card("d", d, 20, .5), false) == expected, "Class matrix");
+            Check(DuelMatch.ClassMultiplier(a, d) == expected / 20.0, "Class multiplier matches the damage");
         }
         Check(DuelMatch.FirstAttackerOf(1, 100, 100) == 0, "Round 1 A first");
         Check(DuelMatch.FirstAttackerOf(2, 100, 100) == 1, "Round 2 B first");
@@ -137,9 +139,9 @@ public static class DuelMatchTests
         Check(WarCryRules.Power(-80) == 0 && WarCryRules.Power(-35) == 0, "Silence and threshold give no cry bonus");
         Check(Math.Abs(WarCryRules.Power(-21.5f) - 0.5f) < 0.001f, "Decibels scale cry power linearly");
         Check(WarCryRules.Power(0) == 1 && WarCryRules.Power(float.NaN) == 0, "Cry power bounded and NaN safe");
-        Check(DuelMatch.CalculateDamage(sword, sword, false, 1) == 2 * DuelMatch.CalculateDamage(sword, sword, false), "Full cry doubles damage");
+        Check(DuelMatch.CalculateDamage(Card("sword", WeaponClass.Light, 40, .4), Card("sword2", WeaponClass.Light, 40, .4), false, 1) == 60, "Full cry gives x1.5 damage");
         Check(DuelMatch.CalculateDamage(Card("sword", WeaponClass.Light, 25, .5),
-            Card("sword2", WeaponClass.Light, 25, .5), true, 1) == 25, "Cry and block applied before rounding");
+            Card("sword2", WeaponClass.Light, 25, .5), true, 1) == 19, "Cry and block applied before rounding");
         var cry = new DuelMatch();
         cry.Equip(0, Card("sword", WeaponClass.Light, 20, .5));
         cry.Equip(1, Card("sword2", WeaponClass.Light, 20, .5));
@@ -148,15 +150,15 @@ public static class DuelMatchTests
         cry.Record(0, GestureSlot.Attack, AttackDirection.Up, .5f);
         Check(cry.WarCryPower(0) == .5f, "Redo replaces cry power");
         cry.ConfirmStep();
-        cry.Record(1, GestureSlot.Defense, AttackDirection.Down, 1);
-        Check(cry.WarCryPower(1) == 0, "Defense cannot gain cry power");
+        cry.Record(0, GestureSlot.Defense, AttackDirection.Up);
         cry.ConfirmStep();
         cry.Record(1, GestureSlot.Attack, AttackDirection.Down, 1);
         cry.ConfirmStep();
-        cry.Record(0, GestureSlot.Defense, AttackDirection.Up);
+        cry.Record(1, GestureSlot.Defense, AttackDirection.Down, 1);
+        Check(cry.WarCryPower(1) == 1, "Defense does not change cry power");
         cry.ConfirmStep();
         cry.Fight();
-        Check(cry.Exchanges[0].damage == 30 && cry.Exchanges[1].damage == 40, "Independent cries affect actual exchanges");
+        Check(cry.Exchanges[0].damage == 25 && cry.Exchanges[1].damage == 30, "Independent cries affect actual exchanges");
         cry.FinishClash();
         cry.Continue();
         Check(cry.WarCryPower(0) == 0 && cry.WarCryPower(1) == 0, "Cry resets between rounds");
