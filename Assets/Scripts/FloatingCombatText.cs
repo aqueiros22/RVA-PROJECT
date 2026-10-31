@@ -6,7 +6,9 @@ using UnityEngine.UI;
 public class FloatingCombatText : MonoBehaviour
 {
     public float duration = 1.4f;
-    public float rise = 110f;
+    // Only a little up, mostly sideways, so the number never covers the name and health bar above the character
+    public float rise = 40f;
+    public float sideDrift = 150f;
 
     private Vector3 worldPoint;
     private RectTransform rect;
@@ -14,7 +16,8 @@ public class FloatingCombatText : MonoBehaviour
     private Vector2 drift;
     private float start;
 
-    public static FloatingCombatText Spawn(Transform canvas, Vector3 worldPoint, string value, Color valueColor, string tag, Color tagColor)
+    // side: -1 floats to the left of the screen, 1 to the right (away from the attacker)
+    public static FloatingCombatText Spawn(Transform canvas, Vector3 worldPoint, string value, Color valueColor, string tag, Color tagColor, float side)
     {
         var obj = new GameObject("Floating Combat Text", typeof(RectTransform), typeof(CanvasGroup));
         obj.transform.SetParent(canvas, false);
@@ -32,8 +35,7 @@ public class FloatingCombatText : MonoBehaviour
         text.worldPoint = worldPoint;
         text.rect = rect;
         text.group = obj.GetComponent<CanvasGroup>();
-        // A little sideways drift so two hits in a row do not overlap
-        text.drift = new Vector2(Random.Range(-35f, 35f), 0f);
+        text.drift = new Vector2(side * text.sideDrift, 0f);
         text.start = Time.unscaledTime;
         text.Update();
         return text;

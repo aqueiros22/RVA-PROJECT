@@ -6,8 +6,6 @@ public class WeaponStats : MonoBehaviour
     public WeaponClass weaponClass = WeaponClass.Light;
     // Damage dealt by an attack with this weapon, before the class multiplier
     public int baseDamage = 20;
-    // Fraction of the damage that still gets through when this weapon blocks
-    [Range(0f, 1f)] public float blockPassThrough = 0.4f;
 
     // Light beats Heavy, Heavy beats Defense, Defense beats Light
     public static WeaponClass StrongAgainst(WeaponClass weaponClass)

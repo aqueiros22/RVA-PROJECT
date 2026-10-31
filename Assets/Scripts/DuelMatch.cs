@@ -15,10 +15,9 @@ public sealed class DuelMatch
         public readonly string id;
         public readonly WeaponClass weaponClass;
         public readonly int damage;
-        public readonly double block;
-        public Card(string id, WeaponClass weaponClass, int damage, double block)
+        public Card(string id, WeaponClass weaponClass, int damage)
         {
-            this.id = id; this.weaponClass = weaponClass; this.damage = damage; this.block = block;
+            this.id = id; this.weaponClass = weaponClass; this.damage = damage;
         }
     }
 
@@ -81,7 +80,7 @@ public sealed class DuelMatch
         cards[player] = card;
         if (cards[0] != null && cards[1] != null)
         {
-            FirstAttacker = FirstAttackerOf(Round, health[0], health[1]);
+            FirstAttacker = FirstAttackerOf(Round, health[0], health[1], FirstAttacker);
             Step = 0;
             Phase = DuelPhase.Record;
         }
@@ -162,7 +161,9 @@ public sealed class DuelMatch
         exchanges.Clear();
     }
 
-    public static int FirstAttackerOf(int round, int hpA, int hpB) => round == 1 ? 0 : round == 2 ? 1 : hpA < hpB ? 0 : 1;
+    // Round 1: A. Then the player with less HP, so the one behind strikes first; a tie swaps the previous order
+    public static int FirstAttackerOf(int round, int hpA, int hpB, int previousFirst) =>
+        round == 1 ? 0 : hpA != hpB ? (hpA < hpB ? 0 : 1) : 1 - previousFirst;
     public static int DecideWinner(int hpA, int hpB, int blocksA, int blocksB)
     {
         if (hpA != hpB) return hpA > hpB ? 0 : 1;
@@ -176,8 +177,10 @@ public sealed class DuelMatch
 
     public static int CalculateDamage(Card attacker, Card defender, bool blocked, float cryPower = 0f)
     {
+        // A defense in the right direction stops the whole attack, whatever the weapons
+        if (blocked) return 0;
         double multiplier = ClassMultiplier(attacker.weaponClass, defender.weaponClass);
-        // Round halves up: 25 * 0.5 = 13, as specified in the rules.
-        return (int)Math.Round(attacker.damage * multiplier * (blocked ? defender.block : 1) * WarCryRules.Multiplier(cryPower), MidpointRounding.AwayFromZero);
+        // Round halves up: 31.5 -> 32
+        return (int)Math.Round(attacker.damage * multiplier * WarCryRules.Multiplier(cryPower), MidpointRounding.AwayFromZero);
     }
 }

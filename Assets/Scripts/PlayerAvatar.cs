@@ -7,7 +7,9 @@ public class PlayerAvatar : MonoBehaviour
     public bool showNameLabel = true;
     // Label height in the character's local units (the model is about 2 units tall)
     public float labelHeight = 2.3f;
-    public Color labelColor = Color.yellow;
+    // Each player's colour (A cyan, B magenta): the name above the character and the name in the prompts
+    public static readonly Color[] PlayerColors = { new Color(0.18f, 0.77f, 1f), new Color(1f, 0.31f, 0.85f) };
+    public static Color ColorOf(int player) => PlayerColors[Mathf.Clamp(player, 0, PlayerColors.Length - 1)];
     public RuntimeAnimatorController animatorController;
     // Playback speed of the attack animations (heavy weapons swing slower)
     public float attackSpeed = 1f;
@@ -105,6 +107,41 @@ public class PlayerAvatar : MonoBehaviour
     private SpriteRenderer healthFillRenderer;
     private static Sprite healthSprite;
 
+    // The swings step forward: after the animation each body is pushed back from the other one,
+    // so the two characters never walk into each other (gap between the bodies, in local units)
+    public float minBodyGap = 0.7f;
+    private static readonly System.Collections.Generic.List<PlayerAvatar> avatars = new System.Collections.Generic.List<PlayerAvatar>();
+    private Transform body;
+
+    void OnEnable() { avatars.Add(this); }
+    void OnDisable() { avatars.Remove(this); }
+
+    private void KeepApart()
+    {
+        if (body == null) body = FindChild(transform, "spine_01");
+        if (body == null) return;
+        float gap = minBodyGap * transform.lossyScale.y;
+        foreach (var other in avatars)
+        {
+            if (other == this || other.body == null) continue;
+            Vector3 apart = Vector3.ProjectOnPlane(body.position - other.body.position, transform.up);
+            float distance = apart.magnitude;
+            // Each one moves half of the overlap
+            if (distance > 1e-5f && distance < gap) body.position += apart / distance * ((gap - distance) * 0.5f);
+        }
+    }
+
+    private static Transform FindChild(Transform parent, string name)
+    {
+        foreach (Transform child in parent)
+        {
+            if (child.name == name) return child;
+            var found = FindChild(child, name);
+            if (found != null) return found;
+        }
+        return null;
+    }
+
     void Start()
     {
         duel = FindAnyObjectByType<DuelController>();
@@ -193,7 +230,10 @@ public class PlayerAvatar : MonoBehaviour
         if (equippedWeapon == null) return;
         var aura = equippedWeapon.GetComponent<WarCryAura>();
         if (aura == null && power > 0) aura = equippedWeapon.AddComponent<WarCryAura>();
-        if (aura != null) aura.Power = Mathf.Clamp01(power);
+        if (aura == null) return;
+        aura.Power = Mathf.Clamp01(power);
+        // The lightning is in the player's colour, so it shows whose cry is charged
+        aura.Tint = ColorOf(playerIndex);
     }
 
     // Puts a weapon in the right hand, replacing the current one
@@ -292,7 +332,7 @@ public class PlayerAvatar : MonoBehaviour
         label.fontStyle = FontStyle.Bold;
         label.anchor = TextAnchor.LowerCenter;
         label.alignment = TextAlignment.Center;
-        label.color = labelColor;
+        label.color = ColorOf(playerIndex);
         if (duel != null)
         {
             if (healthSprite == null)
@@ -315,6 +355,7 @@ public class PlayerAvatar : MonoBehaviour
 
     void LateUpdate()
     {
+        KeepApart();
         if (label == null)
         {
             return;
@@ -332,9 +373,9 @@ public class PlayerAvatar : MonoBehaviour
         {
             // Shown health only drops when the blade connects in the clash
             int hp = duel.ShownHealth(playerIndex);
-            // The bar alone shows the health
+            // The bar alone shows the health (red when low); the name keeps the player's colour
             label.text = PlayerProfiles.Instance.Get(playerIndex).name;
-            label.color = hp <= 25 ? Color.red : labelColor;
+            label.color = ColorOf(playerIndex);
             if (healthFill != null)
             {
                 float fraction = hp / 100f;

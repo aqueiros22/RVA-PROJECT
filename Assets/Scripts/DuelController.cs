@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Globalization;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -11,6 +12,8 @@ public class DuelController : MonoBehaviour
 {
     [Tooltip("Seconds of 3-2-1 while the pen is held in the square.")]
     public int countdownSeconds = 3;
+    [Tooltip("Seconds to wait for the pen tip to reach the square before giving up.")]
+    public float penWaitSeconds = 10f;
     [Tooltip("Seconds to drag the pen out of the square.")]
     public float captureSeconds = 4f;
     [Tooltip("Side of the square, as a fraction of the shorter screen side.")]
@@ -37,7 +40,7 @@ public class DuelController : MonoBehaviour
     private Capture capture;
     private AttackDirection pendingDirection;
     private Vector2 origin;
-    private float captureEnd, reviewStart, lastPenSeen;
+    private float captureEnd, reviewStart, lastPenSeen, penWaitEnd;
     private string notice;
     private WarCryMicrophone warCry;
     private float pendingCryPower;
@@ -52,27 +55,33 @@ public class DuelController : MonoBehaviour
     private DuelPhase previousPhase;
 
     private GameObject hud;
-    private Text prompt, subPrompt, bigText, fightText, roundText, legendHint, banner;
+    private Text prompt, subPrompt, bigText, fightText, roundText, banner, bannerUnder;
     private Coroutine bannerRoutine;
-    private GameObject promptBox, legend;
+    // When the knockout blow landed this match (-1: none yet)
+    private float knockOutTime = -1f;
+    private GameObject promptBox;
     private readonly Button[] buttons = new Button[2];
     private readonly Text[] buttonTexts = new Text[2];
     private readonly System.Action[] buttonActions = new System.Action[2];
     private Button fightButton;
     private Image flash;
     private Coroutine flashRoutine;
-    private Texture2D dotTexture;
+    private Texture2D dotTexture, roundedTexture;
     private GUIStyle arrowStyle;
 
     private const int Left = 0, Right = 1;
     private const float CryTail = 1.5f;
+    // The victory music plays this long, then fades out
+    private const float VictorySeconds = 2.5f;
+    private static readonly Color FightColor = new Color(0.98f, 0.74f, 0.25f);
+    private static readonly Color FightTextColor = new Color(0.25f, 0.12f, 0.03f);
     private static readonly Color KnockOutColor = new Color(1f, 0.2f, 0.12f);
     private static readonly Color WinnerColor = new Color(1f, 0.82f, 0.25f);
-    private static readonly Color PromptColor = new Color(0f, 0f, 0f, 0.45f);
+    private static readonly Color PromptColor = new Color(0f, 0f, 0f, 0.6f);
     private static readonly Color ButtonColor = new Color(0.5f, 0.36f, 0.06f, 0.92f);
     private static readonly Color PrimaryColor = new Color(0.12f, 0.55f, 0.25f, 0.95f);
     private static readonly Color TraceColor = new Color(1f, 0.85f, 0.2f);
-    private static readonly Color SubColor = new Color(0.85f, 0.85f, 0.85f);
+    private static readonly Color SubColor = new Color(0.96f, 0.96f, 0.96f);
     private static readonly Color NoticeColor = new Color(1f, 0.7f, 0.3f);
 
     private static string L(string english, string portuguese) => Localization.Get(english, portuguese);
@@ -82,7 +91,7 @@ public class DuelController : MonoBehaviour
         warCry = GetComponent<WarCryMicrophone>();
         if (warCry == null) warCry = gameObject.AddComponent<WarCryMicrophone>();
         // The recording must hold the countdown, the whole drag and the tail after it
-        warCry.recordSeconds = Mathf.Max(warCry.recordSeconds, countdownSeconds + Mathf.CeilToInt(captureSeconds + CryTail) + 2);
+        warCry.recordSeconds = Mathf.Max(warCry.recordSeconds, countdownSeconds + Mathf.CeilToInt(penWaitSeconds + captureSeconds + CryTail) + 2);
         cryAudio = gameObject.AddComponent<AudioSource>();
         cryAudio.playOnAwake = false;
         cryAudio.spatialBlend = 0f;
@@ -97,6 +106,7 @@ public class DuelController : MonoBehaviour
     void OnDestroy()
     {
         if (dotTexture != null) Destroy(dotTexture);
+        if (roundedTexture != null) Destroy(roundedTexture);
         ClearCries();
     }
 
@@ -155,7 +165,7 @@ public class DuelController : MonoBehaviour
     public bool Equip(int player, string id, WeaponStats stats)
     {
         if (stats == null || Match == null) return false;
-        return Match.Equip(player, new DuelMatch.Card(id, stats.weaponClass, stats.baseDamage, stats.blockPassThrough));
+        return Match.Equip(player, new DuelMatch.Card(id, stats.weaponClass, stats.baseDamage));
     }
 
     // Editor keyboard: an arrow fills the gesture being captured, like a pen stroke
@@ -174,6 +184,7 @@ public class DuelController : MonoBehaviour
         if (Match.CurrentSlot == GestureSlot.Attack) warCry.Begin();
         capture = Capture.Countdown;
         captureEnd = Time.unscaledTime + countdownSeconds;
+        penWaitEnd = Time.unscaledTime + penWaitSeconds;
         // The button's own click is the "3"
         lastCountdownNumber = countdownSeconds;
         notice = null;
@@ -184,7 +195,18 @@ public class DuelController : MonoBehaviour
         if (Match.Phase != DuelPhase.Record) { CancelCapture(); return; }
         if (Time.timeScale == 0f) { CancelCapture(); return; }
         float now = Time.unscaledTime;
-        if (capture == Capture.Countdown && now < captureEnd)
+        if (capture == Capture.Countdown && !PenInSquare())
+        {
+            // The 3-2-1 only runs with the pen tip in the square: it starts over when the pen leaves
+            captureEnd = now + countdownSeconds;
+            lastCountdownNumber = countdownSeconds;
+            if (now >= penWaitEnd)
+            {
+                CancelCapture();
+                notice = L("Pen not found - try again.", "Caneta não encontrada - tenta outra vez.");
+            }
+        }
+        else if (capture == Capture.Countdown && now < captureEnd)
         {
             // A click for each number of the 3-2-1
             int number = Mathf.CeilToInt(captureEnd - now);
@@ -193,12 +215,6 @@ public class DuelController : MonoBehaviour
         }
         else if (capture == Capture.Countdown && now >= captureEnd)
         {
-            if (!PenInSquare())
-            {
-                CancelCapture();
-                notice = L("The pen was not in the square - try again.", "A caneta não estava no quadrado - tenta outra vez.");
-                return;
-            }
             origin = pen.Tip;
             lastPenSeen = now;
             GameAudio.Play("go");
@@ -331,15 +347,21 @@ public class DuelController : MonoBehaviour
         }
     }
 
-    // Small line under the attack prompt while drawing
+    // Headline while drawing an attack
     private string CryFeedback()
     {
         if (!warCry.Ready) return L("No microphone - normal damage", "Sem microfone - dano normal");
-        return L($"Shout for more damage! x{WarCryRules.Multiplier(warCry.PeakPower):F2}",
-                 $"Grita para mais dano! x{WarCryRules.Multiplier(warCry.PeakPower):F2}");
+        return L($"Shout for more damage! {Times(warCry.PeakPower)}", $"Grita para mais dano! {Times(warCry.PeakPower)}");
     }
 
+    // The cry's damage multiplier, always written "x1.25" (never "x1,25"), in gold
+    private static string Times(float power) =>
+        $"<color=#FFCB71>x{WarCryRules.Multiplier(power).ToString("0.00", CultureInfo.InvariantCulture)}</color>";
+
     // ---------- Fight ----------
+
+    // The microphone is recording a war cry: GameAudio lowers the music so the cry is not the music played back
+    public bool Listening => warCry != null && warCry.Recording;
 
     private bool PlayersReady => manager.GetAttackPlayer(0) != null && manager.GetAttackPlayer(1) != null;
 
@@ -357,8 +379,10 @@ public class DuelController : MonoBehaviour
 
     private IEnumerator RunClash()
     {
+        knockOutTime = -1f;
+        StartCoroutine(RoundBanner());
         var exchanges = Match.Fight();
-        yield return clash.Play(exchanges,
+        yield return clash.Play(exchanges, null,
             exchange => PlayCry(exchange.attacker),
             exchange =>
             {
@@ -369,25 +393,44 @@ public class DuelController : MonoBehaviour
                 else GameAudio.Play("hit");
                 if (exchange.defenderHealth == 0)
                 {
-                    GameAudio.Play("ko");
+                    knockOutTime = Time.unscaledTime;
+                    // Only the punchy start of the K.O. sound: the victory music takes over below
+                    GameAudio.PlayLong("ko");
                     StartCoroutine(PlayLater("ko_fall", 0.4f));
-                    ShowBanner("K.O.!", KnockOutColor);
+                    // A K.O. means the other player won: both at once, no waiting
+                    ShowBanner("K.O.!", KnockOutColor, L($"{ColoredName(exchange.attacker)} wins!", $"{ColoredName(exchange.attacker)} venceu!"));
                     Flash(new Color(0.95f, 0.1f, 0.05f, 0.45f));
                 }
-                // Green when blocked, red when hit
-                else Flash(exchange.blocked ? new Color(0.15f, 0.9f, 0.3f, 0.18f) : new Color(0.95f, 0.15f, 0.15f, 0.2f));
+                // Red only when hit: a block costs nothing, so no flash
+                else if (!exchange.blocked) Flash(new Color(0.95f, 0.15f, 0.15f, 0.2f));
             });
         Match.FinishClash();
 
         // A K.O. or the last round: straight to the winner, no result screen
         bool knockedOut = Match.Health(0) == 0 || Match.Health(1) == 0;
+        if (knockedOut)
+        {
+            // 0.7 s after the blow the K.O. sound fades into the victory music, then the buttons come
+            yield return WaitUntilAfterKnockOut(0.7f);
+            GameAudio.StopLong(0.2f);
+            GameAudio.PlayLong("victory", VictorySeconds);
+            yield return WaitUntilAfterKnockOut(1f);
+        }
         if (knockedOut || Match.Round == 3)
         {
             Match.Continue();
             ClearCries();
-            if (!knockedOut) ShowBanner(WinnerText(), WinnerColor);
-            GameAudio.Play("victory");
+            if (!knockedOut)
+            {
+                ShowBanner(WinnerText(), WinnerColor);
+                GameAudio.PlayLong("victory", VictorySeconds);
+            }
         }
+    }
+
+    private IEnumerator WaitUntilAfterKnockOut(float seconds)
+    {
+        while (Time.unscaledTime < knockOutTime + seconds) yield return null;
     }
 
     private static IEnumerator PlayLater(string sound, float delay)
@@ -397,15 +440,25 @@ public class DuelController : MonoBehaviour
     }
 
     private string WinnerText() => Match.Winner < 0 ? L("Draw!", "Empate!") :
-        L($"{PlayerName(Match.Winner)} wins!", $"{PlayerName(Match.Winner)} venceu!");
+        L($"{ColoredName(Match.Winner)} wins!", $"{ColoredName(Match.Winner)} venceu!");
 
-    // Big centred text that pops in and stays: K.O.! or the winner
-    private void ShowBanner(string text, Color color)
+    // Big centred text that pops in and stays: K.O.! (with the winner under it) or the winner
+    private void ShowBanner(string text, Color color, string under = "")
     {
         if (bannerRoutine != null) StopCoroutine(bannerRoutine);
         banner.text = text;
         banner.color = color;
+        bannerUnder.text = under;
         bannerRoutine = StartCoroutine(PopBanner());
+    }
+
+    // "ROUND 2" for a moment when FIGHT is pressed
+    private IEnumerator RoundBanner()
+    {
+        ShowBanner(L($"ROUND {Match.Round}", $"RONDA {Match.Round}"), Color.white);
+        yield return new WaitForSecondsRealtime(0.9f);
+        // Unless a K.O. replaced it meanwhile
+        if (knockOutTime < 0f) { banner.text = ""; bannerUnder.text = ""; }
     }
 
     private IEnumerator PopBanner()
@@ -413,10 +466,11 @@ public class DuelController : MonoBehaviour
         const float duration = 0.25f;
         for (float t = 0; t < duration; t += Time.unscaledDeltaTime)
         {
-            banner.rectTransform.localScale = Vector3.one * Mathf.Lerp(1.8f, 1f, 1f - (1f - t / duration) * (1f - t / duration));
+            var scale = Vector3.one * Mathf.Lerp(1.8f, 1f, 1f - (1f - t / duration) * (1f - t / duration));
+            banner.rectTransform.localScale = bannerUnder.rectTransform.localScale = scale;
             yield return null;
         }
-        banner.rectTransform.localScale = Vector3.one;
+        banner.rectTransform.localScale = bannerUnder.rectTransform.localScale = Vector3.one;
         bannerRoutine = null;
     }
 
@@ -427,19 +481,28 @@ public class DuelController : MonoBehaviour
         if (defender == null) return;
         string tag = "";
         Color tagColor = Color.white;
-        if (exchange.defenderHealth == 0) { tag = "K.O.!"; tagColor = new Color(1f, 0.25f, 0.2f); }
-        else if (exchange.blocked) { tag = L("BLOCKED", "BLOQUEADO"); tagColor = new Color(0.55f, 0.85f, 1f); }
+        // A K.O. needs no tag: the big K.O.! banner says it
+        if (exchange.defenderHealth == 0) { }
+        // White, not blue: cyan is player A's colour
+        else if (exchange.blocked) { tag = L("BLOCKED", "BLOQUEADO"); tagColor = Color.white; }
         else if (exchange.classMultiplier > 1) { tag = L("CRITICAL!", "CRÍTICO!"); tagColor = new Color(1f, 0.82f, 0.2f); }
         else if (exchange.classMultiplier < 1) { tag = L("Not very effective...", "Pouco efetivo..."); tagColor = new Color(0.75f, 0.75f, 0.75f); }
-        FloatingCombatText.Spawn(hud.transform, defender.HitPoint, $"-{exchange.damage}", DamageColor(exchange.damage), tag, tagColor);
+        // A block stops all the damage: no "-0", only the tag
+        string value = exchange.blocked ? "" : $"-{exchange.damage}";
+        // Floats away from the attacker, beside the defender rather than over their name
+        var attacker = manager.GetAvatar(exchange.attacker);
+        float side = 1f;
+        var camera = Camera.main;
+        if (attacker != null && camera != null)
+            side = camera.WorldToScreenPoint(defender.HitPoint).x >= camera.WorldToScreenPoint(attacker.HitPoint).x ? 1f : -1f;
+        FloatingCombatText.Spawn(hud.transform, defender.HitPoint, value, DamageColor(exchange.damage), tag, tagColor, side);
     }
 
-    // Yellow for a scratch, orange, then red for a heavy blow
+    // Yellow for a scratch to orange for a heavy blow; red is kept for the K.O.
     private static Color DamageColor(int damage)
     {
-        Color low = new Color(1f, 0.95f, 0.35f), mid = new Color(1f, 0.55f, 0.1f), high = new Color(1f, 0.15f, 0.1f);
-        float t = Mathf.InverseLerp(10f, 60f, damage);
-        return t < 0.5f ? Color.Lerp(low, mid, t * 2f) : Color.Lerp(mid, high, (t - 0.5f) * 2f);
+        Color low = new Color(1f, 0.95f, 0.35f), high = new Color(1f, 0.55f, 0.1f);
+        return Color.Lerp(low, high, Mathf.InverseLerp(10f, 60f, damage));
     }
 
     private void Advance()
@@ -462,7 +525,10 @@ public class DuelController : MonoBehaviour
         notice = null;
         if (flash != null) flash.color = Color.clear;
         if (banner != null) { banner.text = ""; banner.rectTransform.localScale = Vector3.one; }
+        if (bannerUnder != null) bannerUnder.text = "";
         bannerRoutine = flashRoutine = null;
+        knockOutTime = -1f;
+        GameAudio.StopLong();
         manager.ClearRoundWeapons();
         for (int i = 0; i < 2; i++)
         {
@@ -499,6 +565,10 @@ public class DuelController : MonoBehaviour
         return string.IsNullOrWhiteSpace(name) ? L($"Player {(i == 0 ? "A" : "B")}", $"Jogador {(i == 0 ? "A" : "B")}") : name;
     }
 
+    // The name in the player's colour, for the prompts and the banner (a typed "<" cannot open a tag)
+    private string ColoredName(int i) =>
+        $"<color=#{ColorUtility.ToHtmlStringRGB(PlayerAvatar.ColorOf(i))}>{PlayerName(i).Replace("<", "‹")}</color>";
+
     private static string Arrow(AttackDirection direction)
     {
         switch (direction)
@@ -527,7 +597,6 @@ public class DuelController : MonoBehaviour
         SetButton(Left, null, null);
         SetButton(Right, null, null);
         fightButton.gameObject.SetActive(false);
-        legend.SetActive(phase == DuelPhase.Pick);
         bigText.text = "";
         roundText.text = $"{L("ROUND", "RONDA")} {Match.Round}/3";
         // A short headline and a small line under it
@@ -536,7 +605,6 @@ public class DuelController : MonoBehaviour
         switch (phase)
         {
             case DuelPhase.Pick:
-                legendHint.text = L("On the cards: green = beats · red = loses to", "Nas cartas: verde = vence · vermelho = perde");
                 text = L("Pick a weapon each", "Escolham uma arma cada um");
                 sub = L("Slide a card next to your player · Player A: regular cards · Player B: II cards",
                         "Encostem uma carta ao vosso jogador · Jogador A: cartas normais · Jogador B: cartas II");
@@ -547,7 +615,7 @@ public class DuelController : MonoBehaviour
                 }
                 else if (ArenaMenu.Mode == ArenaMode.PlayerVsComputer)
                 {
-                    text = L($"{PlayerName(0)}: pick a weapon", $"{PlayerName(0)}: escolhe uma arma");
+                    text = L($"{ColoredName(0)}: pick a weapon", $"{ColoredName(0)}: escolhe uma arma");
                     sub = L("Slide a regular card next to your player · Player B is the computer",
                             "Encosta uma carta normal ao teu jogador · O jogador B é o computador");
                 }
@@ -559,7 +627,9 @@ public class DuelController : MonoBehaviour
                 text = L("Ready? Press FIGHT!", "Prontos? Carreguem em LUTA!");
                 sub = L("Put the pen away and keep both PLAYER cards in view", "Afastem a caneta e mantenham as cartas PLAYER visíveis");
                 fightButton.gameObject.SetActive(true);
-                fightText.text = L($"ROUND {Match.Round}\nFIGHT!", $"RONDA {Match.Round}\nLUTA!");
+                fightText.text = L("FIGHT!", "LUTA!");
+                // A slow pulse while it waits to be pressed
+                fightButton.transform.localScale = Vector3.one * (1f + 0.04f * Mathf.Sin(Time.unscaledTime * 4f));
                 break;
             case DuelPhase.Clash:
                 break;
@@ -568,8 +638,7 @@ public class DuelController : MonoBehaviour
                 SetButton(Right, L("Next round", "Próxima ronda"), Advance);
                 break;
             case DuelPhase.GameOver:
-                // After a K.O. the banner says K.O.! and the winner goes here; otherwise the banner names the winner
-                if (Match.Health(0) == 0 || Match.Health(1) == 0) text = WinnerText();
+                // The banner names the winner (under the K.O.! after a knockout)
                 SetButton(Right, L("Play again", "Jogar outra vez"), Restart);
                 SetButton(Left, L("Main menu", "Menu principal"), () =>
                 {
@@ -606,25 +675,27 @@ public class DuelController : MonoBehaviour
             case Capture.Armed:
                 bigText.text = L("DRAG!", "ARRASTA!");
                 SetButton(Left, L("Cancel", "Cancelar"), CancelCapture);
+                // The cry and the time left on the big line, how to drag under it
                 string seconds = $"{Mathf.CeilToInt(captureEnd - Time.unscaledTime)} s";
-                sub = attack ? $"{CryFeedback()}  ·  {seconds}" : seconds;
-                return L("Drag the pen up, down, left or right", "Arrasta a caneta para cima, baixo, esquerda ou direita");
+                string drag = L("Drag the pen up, down, left or right", "Arrasta a caneta para cima, baixo, esquerda ou direita");
+                if (!attack) return $"{drag}  ·  {seconds}";
+                sub = drag;
+                return $"{CryFeedback()}  ·  {seconds}";
             case Capture.Review:
                 SetButton(Left, L("Redo", "Repetir"), DetectPen);
                 SetButton(Right, L("Confirm", "Confirmar"), ConfirmGesture);
                 sub = L("Redo it or confirm", "Repete ou confirma");
-                if (attack && pendingCryPower > 0)
-                    sub = L($"War cry x{WarCryRules.Multiplier(pendingCryPower):F2}  ·  ", $"Grito de guerra x{WarCryRules.Multiplier(pendingCryPower):F2}  ·  ") + sub;
                 string slot = attack ? L("Attack", "Ataque") : L("Defense", "Defesa");
-                return $"{slot}: {Arrow(pendingDirection)} {DirectionName(pendingDirection)}";
+                string cry = attack && pendingCryPower > 0 ? L($"  ·  War cry {Times(pendingCryPower)}", $"  ·  Grito {Times(pendingCryPower)}") : "";
+                return $"{slot}: {Arrow(pendingDirection)} {DirectionName(pendingDirection)}{cry}";
         }
 
         SetButton(Right, L("Detect pen", "Detetar caneta"), DetectPen);
-        if (!ArenaMenu.IsComputer(other)) sub = L($"{PlayerName(other)}, don't look!", $"{PlayerName(other)}, não olhes!");
+        if (!ArenaMenu.IsComputer(other)) sub = L($"{ColoredName(other)}, don't look!", $"{ColoredName(other)}, não olhes!");
         // The pen changes hands once, after the first player's defense
-        if (Match.Step == 2) sub = L($"Pass the pen to {PlayerName(me)}", $"Passa a caneta a {PlayerName(me)}") + (sub.Length > 0 ? "  ·  " + sub : "");
-        return attack ? L($"{PlayerName(me)}: draw your attack", $"{PlayerName(me)}: desenha o ataque")
-                      : L($"{PlayerName(me)}: draw your defense", $"{PlayerName(me)}: desenha a defesa");
+        if (Match.Step == 2) sub = L($"Pass the pen to {ColoredName(me)}", $"Passa a caneta a {ColoredName(me)}") + (sub.Length > 0 ? "  ·  " + sub : "");
+        return attack ? L($"{ColoredName(me)}: draw your attack", $"{ColoredName(me)}: desenha o ataque")
+                      : L($"{ColoredName(me)}: draw your defense", $"{ColoredName(me)}: desenha a defesa");
     }
 
     private void SetButton(int slot, string label, System.Action action)
@@ -732,8 +803,6 @@ public class DuelController : MonoBehaviour
         roundText.alignment = TextAnchor.MiddleLeft;
         Shadow(roundText);
 
-        legend = BuildLegend();
-
         // Countdown and "DRAG!"
         bigText = Label(hud.transform, 64);
         Rect(bigText.rectTransform, new Vector2(0.05f, 0.66f), new Vector2(0.95f, 0.84f), Vector2.zero, Vector2.zero);
@@ -744,27 +813,59 @@ public class DuelController : MonoBehaviour
         banner = Label(hud.transform, 130);
         Rect(banner.rectTransform, new Vector2(0.05f, 0.4f), new Vector2(0.95f, 0.75f), Vector2.zero, Vector2.zero);
         banner.fontStyle = FontStyle.Bold;
+        // The winner's name is in their colour
+        banner.supportRichText = true;
         Shadow(banner);
         var thick = banner.gameObject.AddComponent<Outline>();
         thick.effectColor = new Color(0, 0, 0, 0.6f);
         thick.effectDistance = new Vector2(5, -5);
+        // The winner, right under the K.O.!
+        bannerUnder = Label(hud.transform, 60);
+        Rect(bannerUnder.rectTransform, new Vector2(0.05f, 0.28f), new Vector2(0.95f, 0.42f), Vector2.zero, Vector2.zero);
+        bannerUnder.fontStyle = FontStyle.Bold;
+        bannerUnder.supportRichText = true;
+        Shadow(bannerUnder);
 
-        fightButton = MakeButton(hud.transform, "Fight", new Vector2(0.3f, 0.42f), new Vector2(0.7f, 0.6f), Vector2.zero, Vector2.zero, out fightText, 54);
-        fightButton.GetComponent<Image>().color = new Color(0.75f, 0.12f, 0.08f, 0.95f);
+        // FIGHT: a rounded gold button above the prompt, clear of the characters
+        fightButton = MakeButton(hud.transform, "Fight", new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(-150, 144), new Vector2(150, 230), out fightText, 46);
+        var fightImage = fightButton.GetComponent<Image>();
+        fightImage.sprite = RoundedSprite();
+        fightImage.type = Image.Type.Sliced;
+        fightImage.color = FightColor;
+        var fightShadow = fightButton.gameObject.AddComponent<Shadow>();
+        fightShadow.effectColor = new Color(0, 0, 0, 0.55f);
+        fightShadow.effectDistance = new Vector2(0, -6);
         fightText.fontStyle = FontStyle.Bold;
+        fightText.color = FightTextColor;
+        Rect(fightText.rectTransform, Vector2.zero, Vector2.one, new Vector2(70, 2), new Vector2(-16, -2));
+        // Two crossed swords before the word
+        for (int i = 0; i < 2; i++)
+        {
+            var sword = Box(fightButton.transform, "Sword", new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(28, -24), new Vector2(76, 24));
+            sword.sprite = manager.lightIcon;
+            sword.preserveAspect = true;
+            sword.color = manager.lightIcon != null ? FightTextColor : Color.clear;
+            sword.raycastTarget = false;
+            sword.rectTransform.localScale = new Vector3(i == 0 ? 1f : -1f, 1f, 1f);
+        }
         fightButton.onClick.AddListener(Fight);
 
         // Bottom row: secondary button on the left, text in the middle, main button on the right
-        var box = Box(hud.transform, "Turn Prompt", new Vector2(0.21f, 0), new Vector2(0.79f, 0), new Vector2(0, 10), new Vector2(0, 110));
+        var box = Box(hud.transform, "Turn Prompt", new Vector2(0.21f, 0), new Vector2(0.79f, 0), new Vector2(0, 10), new Vector2(0, 130));
         box.color = PromptColor;
         box.raycastTarget = false;
         promptBox = box.gameObject;
         prompt = Label(box.transform, 30);
-        Rect(prompt.rectTransform, new Vector2(0, 0.42f), Vector2.one, new Vector2(10, 0), new Vector2(-10, -6));
+        Rect(prompt.rectTransform, new Vector2(0, 0.46f), Vector2.one, new Vector2(10, 0), new Vector2(-10, -6));
         prompt.fontStyle = FontStyle.Bold;
+        // Player names are in their colour
+        prompt.supportRichText = true;
         Shadow(prompt);
-        subPrompt = Label(box.transform, 18);
-        Rect(subPrompt.rectTransform, Vector2.zero, new Vector2(1, 0.42f), new Vector2(10, 6), new Vector2(-10, 0));
+        // Readable at arm's length: big, near white, never shrunk below 18
+        subPrompt = Label(box.transform, 24);
+        subPrompt.resizeTextMinSize = 18;
+        subPrompt.supportRichText = true;
+        Rect(subPrompt.rectTransform, Vector2.zero, new Vector2(1, 0.46f), new Vector2(10, 6), new Vector2(-10, 0));
         subPrompt.color = SubColor;
         Shadow(subPrompt);
 
@@ -778,32 +879,23 @@ public class DuelController : MonoBehaviour
         }
     }
 
-    // Pick phase: Light > Heavy > Defense > Light, and what the green/red icons on the cards mean
-    private GameObject BuildLegend()
+    // White rounded rectangle, sliced so the corners keep their size on any button
+    private Sprite RoundedSprite()
     {
-        // Small, in the top-left corner under the round counter, clear of the characters
-        var panel = Box(hud.transform, "Class Legend", new Vector2(0, 1), new Vector2(0, 1), new Vector2(12, -126), new Vector2(272, -50));
-        panel.color = PromptColor;
-        panel.raycastTarget = false;
-        Sprite[] icons = { manager.lightIcon, manager.heavyIcon, manager.defenseIcon, manager.lightIcon };
-        for (int i = 0; i < icons.Length; i++)
+        const int size = 64, radius = 22;
+        roundedTexture = new Texture2D(size, size, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+        for (int y = 0; y < size; y++)
+        for (int x = 0; x < size; x++)
         {
-            float x = -99 + i * 66;
-            var icon = Box(panel.transform, "Class Icon", new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(x - 15, -40), new Vector2(x + 15, -6));
-            icon.sprite = icons[i];
-            icon.preserveAspect = true;
-            icon.color = icons[i] != null ? Color.white : Color.clear;
-            icon.raycastTarget = false;
-            if (i < icons.Length - 1)
-            {
-                var arrow = Label(panel.transform, 18);
-                Rect(arrow.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(x + 15, -40), new Vector2(x + 51, -6));
-                arrow.text = "►";
-            }
+            // Distance into the nearest corner's circle; anti-aliased edge
+            float dx = Mathf.Max(0, Mathf.Max(radius - x - 0.5f, x + 0.5f - (size - radius)));
+            float dy = Mathf.Max(0, Mathf.Max(radius - y - 0.5f, y + 0.5f - (size - radius)));
+            float alpha = Mathf.Clamp01(radius - Mathf.Sqrt(dx * dx + dy * dy) + 0.5f);
+            roundedTexture.SetPixel(x, y, new Color(1, 1, 1, alpha));
         }
-        legendHint = Label(panel.transform, 13);
-        Rect(legendHint.rectTransform, Vector2.zero, new Vector2(1, 0), new Vector2(6, 2), new Vector2(-6, 32));
-        return panel.gameObject;
+        roundedTexture.Apply();
+        return Sprite.Create(roundedTexture, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100, 0,
+            SpriteMeshType.FullRect, new Vector4(radius, radius, radius, radius));
     }
 
     private static void Shadow(Text text)

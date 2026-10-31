@@ -13,7 +13,7 @@ public class WeaponIcons : MonoBehaviour
     private static Sprite backdropSprite;
 
     // Icon size and spacing, as fractions of the weapon height
-    private const float IconSize = 0.32f;
+    private const float IconSize = 0.5f;
     private const float AboveGap = 0.22f;
     private const float BelowDrop = 0.05f;
 

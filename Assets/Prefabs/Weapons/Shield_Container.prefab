@@ -62,7 +62,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WeaponStats
   weaponClass: 2
   baseDamage: 20
-  blockPassThrough: 0.1
 --- !u!1001 &3280066582900731782
 PrefabInstance:
   m_ObjectHideFlags: 0

@@ -24,17 +24,16 @@ Gestures are **recorded first, in secret**, and the fight only plays when someon
    1. First attacker: **attack**, then **defense** (the direction they guess the other's attack comes from).
    2. The other player: **attack**, then **defense**.
 
-   The pen only changes hands once per round. Shout while drawing an attack: the **war cry** adds up to ×1.5 damage and is played back when that attack swings (see `Docs/WarCry.md`).
+   The pen only changes hands once per round. Shout while drawing an attack: the **war cry** adds up to ×1.5 damage and is played back so its loudest moment lands on that attack's hit (see `Docs/WarCry.md`).
 
-   Each gesture: press **Detect pen** → hold the pen tip inside the square in the middle of the screen during the 3-2-1 → *"DRAG!"* → drag the pen up, down, left or right (any speed). The recorded stroke is shown as an animated dotted arrow → **Redo** or **Confirm**.
+   Each gesture: press **Detect pen** → hold the pen tip inside the square in the middle of the screen during the 3-2-1 (it only counts down while the tip is in the square, and starts over if it leaves; after 10 s without the pen it gives up) → *"DRAG!"* → drag the pen up, down, left or right (any speed). The recorded stroke is shown as an animated dotted arrow → **Redo** or **Confirm**.
 3. **FIGHT:** a big *"ROUND n — FIGHT!"* button. Put the pen away and press it.
-4. **Clash:** the first attacker swings, then the other one (a K.O. cancels the counterattack). A defender who guessed the direction holds a block (vertical swing) or a crouch (side swing) for the whole swing. HP drops when the blade connects, and the damage floats up from the defender (yellow → red with the amount), tagged **CRITICAL!** (class advantage), **Not very effective...** (disadvantage), **BLOCKED** or **K.O.!**.
+4. **Clash:** the first attacker swings, then the other one (a K.O. cancels the counterattack). A defender who guessed the direction holds a block (vertical swing) or a crouch (side swing) for the whole swing. HP drops when the blade connects, and the damage floats out beside the defender, away from the attacker and clear of the name (yellow → orange with the amount; red is kept for the K.O.), tagged **CRITICAL!** (class advantage) or **Not very effective...** (disadvantage); a block shows only **BLOCKED**, with no damage. On a K.O. the big **K.O.!** and the winner's name under it appear at once, the K.O. sound fades into the victory music after 0.7 s and the buttons come at 1 s. The two bodies never walk into each other during the swings (`PlayerAvatar.minBodyGap`).
 5. **Next round** button. The cards used this round are out of the game. A **K.O.** shows a big *K.O.!* and ends the game at once; after round 3 the winner is announced in the middle of the screen.
 
 ## Who attacks first
 - Round 1: Player A.
-- Round 2: Player B.
-- Round 3: whoever has **less HP**. If HP is tied, Player B attacks first.
+- Rounds 2 and 3: whoever has **less HP**. If HP is tied, the order of the previous round swaps.
 
 The first attacker also records first.
 
@@ -44,16 +43,16 @@ The first attacker also records first.
 
 ## Damage
 
-**Damage = base damage × class multiplier × block × war cry**
+**Damage = base damage × class multiplier × war cry**, or **0** when blocked.
 
-| Weapon | Class | Base damage | Damage that gets through when blocked |
-|---|---|---|---|
-| Sword, Dagger | Light | 40 | 40% |
-| Axe, Hammer | Heavy | 50 | 50% |
-| Shield | Defense | 20 | 10% |
+| Weapon | Class | Base damage |
+|---|---|---|
+| Sword, Dagger | Light | 40 |
+| Axe, Hammer | Heavy | 50 |
+| Shield | Defense | 20 |
 
 - **Base damage** comes from the attacker's weapon.
-- **Block** comes from the defender's weapon, and only applies if the defense direction **matches** the attack direction.
+- **Block**: a defense in the **same direction** as the attack stops all the damage, whatever the weapons.
 - **War cry**: ×1 (silent) to ×1.5 (full shout) from the attacker's microphone level.
 
 **Class multiplier** (attacker's weapon against the defender's weapon):
@@ -65,9 +64,9 @@ Damage is rounded to the nearest whole number.
 
 **Examples**
 - Axe vs Shield, not blocked: 50 × 1.5 = **75**.
-- Sword vs Shield, blocked: 40 × 0.6 × 10% = **2**.
+- Sword vs Shield, blocked: **0**.
 - Shield vs Sword, not blocked: 20 × 1.5 = **30**.
-- Hammer vs Axe, blocked: 50 × 1 × 50% = **25**.
+- Hammer vs Axe, not blocked: 50 × 1 = **50**.
 
 ## Roadmap
 
@@ -98,7 +97,7 @@ Damage is rounded to the nearest whole number.
 - [x] English / Portuguese for the player setup and the duel HUD (`Localization`, switch in **Settings**).
 
 ### ✅ 1. Weapon data and class icons
-- [x] `WeaponStats` component on each weapon prefab: class (Light / Heavy / Defense), base damage, block %. Values from the **Damage** table above. `WeaponStats.StrongAgainst` / `WeakAgainst` hold the class cycle.
+- [x] `WeaponStats` component on each weapon prefab: class (Light / Heavy / Defense), base damage. Values from the **Damage** table above. `WeaponStats.StrongAgainst` / `WeakAgainst` hold the class cycle.
 - [x] Three class symbols in `Assets/Images/Symbol`: `Light_Symbol` (sword), `Heavy_Symbol` (axe), `Shield_Symbol`.
 - [x] Icons floating over each weapon on its card, always facing the camera (`WeaponIcons`, added by `CardWeaponManager`):
   - **below the weapon, in white:** the icon of its own class;
@@ -110,7 +109,7 @@ Damage is rounded to the nearest whole number.
 
 ### 2. Combat core
 - [x] Health (100 HP) for each player, with a health bar above the character next to the name label.
-- [x] Damage calculation (base damage × class multiplier × block), as described in **Damage**.
+- [x] Damage calculation (base damage × class multiplier, 0 when blocked), as described in **Damage**.
 - [x] Defense gesture: the pen gesture is stored as the defender's block direction.
 - [x] Hit result floating from the defender: the damage plus CRITICAL! / Not very effective... / BLOCKED / K.O.!, with the defender holding a guard (`StartGuard`/`EndGuard`) on a block and `PlayDeath` at 0 HP.
 - [ ] Test and tune the red-tip pen on a real device.
@@ -120,7 +119,7 @@ Damage is rounded to the nearest whole number.
 - [x] On-screen prompts for each step ("Player A: record your attack and your defense. Player B, don't look!", …).
 - [x] The pen panel is hidden in the duel, so no direction is ever shown.
 - [x] Remove the "Switch player" button: the game decides whose turn it is.
-- [x] Turn order: A first in round 1, B in round 2, the player with less HP in round 3.
+- [x] Turn order: A first in round 1, then the player with less HP (a tie swaps the previous order).
 - [x] Cards used in a round can't be equipped again in the same game.
 - [x] Each deck only equips onto its own character: cards without "2" on `PLAYER 1`, II cards on `PLAYER 2`.
 - [x] Game over screen: a big K.O.! (winner named below) or "X wins!" by HP, tie-break by blocks, then draw. "Play again" and "Main menu" buttons, no extra result screen.
@@ -134,7 +133,7 @@ Damage is rounded to the nearest whole number.
 
 ### 5. Device and playtesting
 - [ ] Android build tested on a phone with the printed cards.
-- [ ] Playtest sessions to balance the numbers (damage, block %, multipliers).
+- [ ] Playtest sessions to balance the numbers (damage, multipliers).
 - [ ] Print sheet with all 12 cards at the right size (6.3 cm wide), the English versions.
 
 ### 6. Playtest 1 improvements
@@ -152,8 +151,10 @@ Feedback from the first phone test. Full plan and status: [Docs/Playtest1_Improv
 - [x] The recorded stroke is shown as an animated dotted arrow before **Confirm**.
 - [x] Recording per player: A attack → A defense → B attack → B defense (the pen changes hands once).
 - [x] Cleaner HUD: no top status panels (health stays above each character), buttons left/right of the prompt, small round counter.
-- [x] Class legend (Light ► Heavy ► Defense ► Light) during the pick, explaining the green/red icons on the cards.
-- [x] Green/red screen flash when a blade blocks or hits.
+- [x] Bigger class icons on the cards (half the weapon's height); the corner class legend was removed as redundant.
+- [x] Larger, near-white second line in the prompt; the war cry multiplier and the seconds left sit on the headline, always written "x1.25".
+- [x] Red screen flash when a blade hits (none on a block, which costs no HP).
+- [x] Player colours: player A cyan, player B magenta, on the name above the character and on the names in the prompts and the winner banner.
 
 ### Later ideas (not planned yet)
 - Special ability per card.
@@ -165,7 +166,7 @@ Feedback from the first phone test. Full plan and status: [Docs/Playtest1_Improv
 
 `DuelMatch` holds the three-round rules, health, blocks, card ownership, consumed cards and each round's secret gestures (four `Record` → `ConfirmStep` steps, attack then defense for each player → `Fight` resolves both attacks → `FinishClash` → `Continue`). `DuelController` starts after player customization and controls the HUD, the Detect pen / Redo / Confirm capture (it reads `ColorGestureTracker.Tip` and classifies the stroke with `PenStroke`) and the FIGHT button; `ClashDirector` plays the animations. A card locks when equipped; both players must equip before recording starts. Choose your three-card hand physically before the match, as in Setup above. Both player cards must be visible to press FIGHT.
 
-Health bars (no numbers) appear under each name above the characters; they only drop when the blade connects. The prompt is a short headline ("Ana: draw your attack") with a small line under it ("Bruno, don't look!"). During the duel the player characters stay put when a hand covers their card: a covered or jumping card is placed from the other player card, or frozen if both are covered (`CardWeaponManager`, *Duel stability*). The recorded direction is shown only to the player who drew it, before Confirm. **Play again** resets HP, blocks and used cards, keeping the customized characters.
+Health bars (no numbers) appear under each name above the characters; they only drop when the blade connects and turn red at 25 HP or less. Each name is in its player's colour (A cyan, B magenta), above the character and in the prompts. The prompt is a short headline ("Ana: draw your attack") with a second line under it ("Bruno, don't look!"). While drawing an attack the headline shows the cry multiplier in gold and the seconds left ("Shout for more damage! x1.25 · 3 s"). During the duel the player characters stay put when a hand covers their card: a covered or jumping card is placed from the other player card, or frozen if both are covered (`CardWeaponManager`, *Duel stability*). Both cards lie on one table, so a card whose pose tilts away from the other one (the pen over it) is never trusted, however long it lasts (`tableTilt`). Weapon cards that are not equipped only show their weapon and class icons while picking. The FIGHT button is a pulsing gold button above the prompt; pressing it shows "ROUND n" for a moment. The war cry lightning on the weapon is in the player's colour and stays for the whole round. The duel music is quieter than the menu music (`GameAudio.duelMusicVolume`) and drops further while the microphone records a cry. The recorded direction is shown only to the player who drew it, before Confirm. **Play again** resets HP, blocks and used cards, keeping the customized characters.
 
 Run the standalone rules tests without a .NET SDK using Unity's bundled compiler/runtime:
 

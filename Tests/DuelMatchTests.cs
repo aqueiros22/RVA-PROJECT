@@ -8,7 +8,7 @@ public static class DuelMatchTests
         assertions++;
         if (!value) throw new Exception(message);
     }
-    private static DuelMatch.Card Card(string id, WeaponClass type, int damage, double block) => new DuelMatch.Card(id, type, damage, block);
+    private static DuelMatch.Card Card(string id, WeaponClass type, int damage) => new DuelMatch.Card(id, type, damage);
 
     // Each player records their attack then their defense; each defender guesses right when block[defender] is true. Then FIGHT.
     private static void PlayRound(DuelMatch match, bool blockA, bool blockB)
@@ -59,27 +59,29 @@ public static class DuelMatchTests
     public static int Main()
     {
         StrokeTests();
-        var axe = Card("axe", WeaponClass.Heavy, 50, .5);
-        var hammer = Card("hammer", WeaponClass.Heavy, 50, .5);
-        var sword = Card("sword", WeaponClass.Light, 40, .4);
-        var shield = Card("shield", WeaponClass.Defense, 20, .1);
+        var axe = Card("axe", WeaponClass.Heavy, 50);
+        var hammer = Card("hammer", WeaponClass.Heavy, 50);
+        var sword = Card("sword", WeaponClass.Light, 40);
+        var shield = Card("shield", WeaponClass.Defense, 20);
         Check(DuelMatch.CalculateDamage(axe, shield, false) == 75, "Axe vs shield = 75");
-        Check(DuelMatch.CalculateDamage(sword, shield, true) == 2, "Sword vs shield blocked = 2");
+        Check(DuelMatch.CalculateDamage(sword, shield, true) == 0, "Sword vs shield blocked = 0");
         Check(DuelMatch.CalculateDamage(shield, sword, false) == 30, "Shield vs sword = 30");
-        Check(DuelMatch.CalculateDamage(hammer, axe, true) == 25, "Hammer vs axe blocked = 25");
-        Check(DuelMatch.CalculateDamage(Card("h", WeaponClass.Heavy, 25, .5), Card("h2", WeaponClass.Heavy, 25, .5), true) == 13, "Half damage rounds up to 13");
+        Check(DuelMatch.CalculateDamage(hammer, axe, false) == 50, "Hammer vs axe = 50");
+        Check(DuelMatch.CalculateDamage(hammer, axe, true, 1) == 0, "A block stops all damage, even a full cry");
+        Check(DuelMatch.CalculateDamage(Card("s", WeaponClass.Light, 21), Card("h", WeaponClass.Heavy, 50), false) == 32, "31.5 rounds up to 32");
         foreach (WeaponClass a in Enum.GetValues(typeof(WeaponClass)))
         foreach (WeaponClass d in Enum.GetValues(typeof(WeaponClass)))
         {
             int expected = a == d ? 20 : ((int)a + 1) % 3 == (int)d ? 30 : 12;
-            Check(DuelMatch.CalculateDamage(Card("a", a, 20, .4), Card("d", d, 20, .5), false) == expected, "Class matrix");
+            Check(DuelMatch.CalculateDamage(Card("a", a, 20), Card("d", d, 20), false) == expected, "Class matrix");
             Check(DuelMatch.ClassMultiplier(a, d) == expected / 20.0, "Class multiplier matches the damage");
         }
-        Check(DuelMatch.FirstAttackerOf(1, 100, 100) == 0, "Round 1 A first");
-        Check(DuelMatch.FirstAttackerOf(2, 100, 100) == 1, "Round 2 B first");
-        Check(DuelMatch.FirstAttackerOf(3, 50, 60) == 0, "Round 3 lower HP first");
-        Check(DuelMatch.FirstAttackerOf(3, 60, 50) == 1, "Round 3 lower HP first B");
-        Check(DuelMatch.FirstAttackerOf(3, 50, 50) == 1, "Round 3 tie B first");
+        Check(DuelMatch.FirstAttackerOf(1, 100, 100, 0) == 0, "Round 1 A first");
+        Check(DuelMatch.FirstAttackerOf(2, 100, 100, 0) == 1, "Tie swaps the previous order");
+        Check(DuelMatch.FirstAttackerOf(3, 50, 50, 1) == 0, "Tie swaps the previous order back");
+        Check(DuelMatch.FirstAttackerOf(2, 25, 60, 0) == 0, "Lower HP first even if they attacked first before");
+        Check(DuelMatch.FirstAttackerOf(3, 50, 60, 1) == 0, "Lower HP first A");
+        Check(DuelMatch.FirstAttackerOf(2, 60, 50, 1) == 1, "Lower HP first B");
         Check(DuelMatch.DecideWinner(60, 50, 0, 3) == 0, "HP takes priority");
         Check(DuelMatch.DecideWinner(50, 50, 2, 1) == 0, "Blocks tiebreak A");
         Check(DuelMatch.DecideWinner(50, 50, 1, 2) == 1, "Blocks tiebreak B");
@@ -93,26 +95,27 @@ public static class DuelMatchTests
         for (int round = 1; round <= 3; round++)
         {
             Check(match.Round == round, "Round progression");
-            Check(match.Equip(0, Card(ids[round - 1], WeaponClass.Light, 20, .4)), "Equip A");
+            Check(match.Equip(0, Card(ids[round - 1], WeaponClass.Light, 20)), "Equip A");
             Check(match.Phase == DuelPhase.Pick, "Wait for both weapons");
             Check(!match.Equip(0, axe), "Cannot replace locked weapon");
-            Check(match.Equip(1, Card(ids[round - 1] + "2", WeaponClass.Light, 20, .4)), "Equip B");
-            Check(match.FirstAttacker == (round == 1 ? 0 : 1), "Actual first attacker");
+            Check(match.Equip(1, Card(ids[round - 1] + "2", WeaponClass.Light, 20)), "Equip B");
+            // Every attack is blocked, so HP stays tied and the order swaps each round
+            Check(match.FirstAttacker == (round == 2 ? 1 : 0), "Actual first attacker");
             PlayRound(match, true, true);
             Check(match.Exchanges.Count == 2, "Both players attack");
-            Check(match.Exchanges[0].blocked && match.Exchanges[0].damage == 8, "Blocked result");
+            Check(match.Exchanges[0].blocked && match.Exchanges[0].damage == 0, "Blocked result");
             Check(match.Exchanges[1].attacker == 1 - match.FirstAttacker, "Second attacker swaps");
             match.Continue();
             Check(match.IsUsed(ids[round - 1]) && match.IsUsed(ids[round - 1] + "2"), "Both cards consumed");
             Check(!match.CanEquip(0, ids[round - 1]), "Used card rejected");
         }
         Check(match.Phase == DuelPhase.GameOver && match.Winner == -1, "Three rounds draw");
-        Check(match.Health(0) == 76 && match.Blocks(0) == 3, "HP and blocks accumulate");
+        Check(match.Health(0) == 100 && match.Blocks(0) == 3, "Blocks accumulate, blocked hits cost no HP");
         Check(!match.Record(0, GestureSlot.Attack, AttackDirection.Up), "No input after game over");
 
         var ko = new DuelMatch();
-        ko.Equip(0, Card("sword", WeaponClass.Light, 150, .4));
-        ko.Equip(1, Card("sword2", WeaponClass.Light, 20, .4));
+        ko.Equip(0, Card("sword", WeaponClass.Light, 150));
+        ko.Equip(1, Card("sword2", WeaponClass.Light, 20));
         PlayRound(ko, false, false);
         Check(ko.Health(1) == 0 && ko.Health(0) == 100, "KO cancels the counterattack");
         Check(ko.Exchanges.Count == 1 && ko.Exchanges[0].defenderHealth == 0, "Only the KO exchange plays");
@@ -129,8 +132,8 @@ public static class DuelMatchTests
         var tiebreak = new DuelMatch();
         for (int round = 0; round < 3; round++)
         {
-            tiebreak.Equip(0, Card(ids[round], WeaponClass.Light, 0, .4));
-            tiebreak.Equip(1, Card(ids[round] + "2", WeaponClass.Light, 0, .4));
+            tiebreak.Equip(0, Card(ids[round], WeaponClass.Light, 0));
+            tiebreak.Equip(1, Card(ids[round] + "2", WeaponClass.Light, 0));
             PlayRound(tiebreak, true, false);
             tiebreak.Continue();
         }
@@ -139,12 +142,10 @@ public static class DuelMatchTests
         Check(WarCryRules.Power(-80) == 0 && WarCryRules.Power(-35) == 0, "Silence and threshold give no cry bonus");
         Check(Math.Abs(WarCryRules.Power(-21.5f) - 0.5f) < 0.001f, "Decibels scale cry power linearly");
         Check(WarCryRules.Power(0) == 1 && WarCryRules.Power(float.NaN) == 0, "Cry power bounded and NaN safe");
-        Check(DuelMatch.CalculateDamage(Card("sword", WeaponClass.Light, 40, .4), Card("sword2", WeaponClass.Light, 40, .4), false, 1) == 60, "Full cry gives x1.5 damage");
-        Check(DuelMatch.CalculateDamage(Card("sword", WeaponClass.Light, 25, .5),
-            Card("sword2", WeaponClass.Light, 25, .5), true, 1) == 19, "Cry and block applied before rounding");
+        Check(DuelMatch.CalculateDamage(Card("sword", WeaponClass.Light, 40), Card("sword2", WeaponClass.Light, 40), false, 1) == 60, "Full cry gives x1.5 damage");
         var cry = new DuelMatch();
-        cry.Equip(0, Card("sword", WeaponClass.Light, 20, .5));
-        cry.Equip(1, Card("sword2", WeaponClass.Light, 20, .5));
+        cry.Equip(0, Card("sword", WeaponClass.Light, 20));
+        cry.Equip(1, Card("sword2", WeaponClass.Light, 20));
         Check(!cry.Record(1, GestureSlot.Attack, AttackDirection.Up, 1) && cry.WarCryPower(1) == 0, "Out of turn cannot charge cry");
         Check(cry.Record(0, GestureSlot.Attack, AttackDirection.Up, 1), "Store attack cry");
         cry.Record(0, GestureSlot.Attack, AttackDirection.Up, .5f);

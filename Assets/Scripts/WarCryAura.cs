@@ -4,6 +4,8 @@ using UnityEngine;
 public class WarCryAura : MonoBehaviour
 {
     public float Power;
+    // The player's colour; the lightning whitens as the cry gets stronger
+    public Color Tint = new Color(0.2f, 0.6f, 1f);
     private LineRenderer bolt;
     private Material material;
     private Bounds bounds;
@@ -54,9 +56,9 @@ public class WarCryAura : MonoBehaviour
         var other = Vector3.Cross(along, across);
         float length = Mathf.Max(0.01f, size[axis]);
         float radius = length * Mathf.Lerp(0.035f, 0.12f, Power);
-        bolt.widthMultiplier = length * Mathf.Lerp(0.007f, 0.025f, Power);
-        bolt.startColor = Color.Lerp(new Color(0.2f, 0.6f, 1), Color.white, Power);
-        bolt.endColor = new Color(0.3f, 0.65f, 1, 0.6f);
+        bolt.widthMultiplier = length * Mathf.Lerp(0.005f, 0.015f, Power);
+        bolt.startColor = Color.Lerp(Tint, Color.white, Power * 0.4f);
+        bolt.endColor = new Color(Tint.r, Tint.g, Tint.b, 0.6f);
         for (int i = 0; i < bolt.positionCount; i++)
         {
             float t = i / (float)(bolt.positionCount - 1);

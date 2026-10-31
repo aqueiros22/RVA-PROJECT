@@ -21,6 +21,8 @@ public class WarCryMicrophone : MonoBehaviour
     public string Status { get; private set; } = "Microphone idle";
     // Still opening or waiting for permission counts as ready: only a failure is reported
     public bool Ready => clip != null || !Status.Contains("normal damage") && !Status.Contains("unavailable");
+    // The microphone is open (from Detect pen to the end of the cry)
+    public bool Recording => clip != null;
     private AudioClip clip;
     private string device;
     private float[] samples;
@@ -78,7 +80,10 @@ public class WarCryMicrophone : MonoBehaviour
     // Only the drag counts for the damage bonus; the recording itself starts at Detect pen
     public void SetMeasuring(bool value) { measuring = value; }
 
-    // The whole shout around its loudest moment (countdown, drag and the moment after included),
+    // The cry's loudest moment comes this long after the clip starts, so the clash can start it early and land it on the hit
+    public const float CryLead = 0.25f;
+
+    // The shout from CryLead before its loudest moment to its end (countdown, drag and the moment after included),
     // with the level evened out, or null without a cry
     public AudioClip TakeCry()
     {
@@ -121,7 +126,8 @@ public class WarCryMicrophone : MonoBehaviour
                 if (rms[w] >= threshold) { first = w; grew = true; break; }
         }
         int pad = clip.frequency / 10;
-        int start = Mathf.Max(0, first * window - pad);
+        // Whatever came before the lead is cut: it would play before the blade connects
+        int start = Mathf.Max(0, loudest * window + window / 2 - Mathf.RoundToInt(CryLead * clip.frequency));
         int stop = Mathf.Min(frames, (last + 1) * window + pad);
 
         int length = stop - start;

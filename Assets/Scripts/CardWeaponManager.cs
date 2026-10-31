@@ -68,6 +68,9 @@ public class CardWeaponManager : MonoBehaviour
     public float jumpAngle = 25f;
     // ...unless it lasts this long: then the card really moved
     public float jumpAcceptTime = 0.5f;
+    // Both player cards lie on the same table: a tracked card tilted further than this from the other one
+    // is a hand or the pen over it, however long it lasts (degrees)
+    public float tableTilt = 20f;
     // Multiplies the smoothing while the duel is on (lower = steadier)
     [Range(0.1f, 1f)] public float holdSmoothing = 0.5f;
 
@@ -92,6 +95,8 @@ public class CardWeaponManager : MonoBehaviour
         public LineRenderer ring;
         // Players during the duel: this frame's goal pose, and whether it can be trusted
         public bool holdGood;
+        // A pose was read from the card this frame (it may still be a glitch)
+        public bool holdTracked;
         public Vector3 holdPosition;
         public Quaternion holdRotation;
         public float holdScale;
@@ -326,8 +331,11 @@ public class CardWeaponManager : MonoBehaviour
             bool held = weapon.isPlayer && weapon.placed && hold;
             bool visible = recent || held;
             weapon.visible = visible;
-            // An equipped weapon lives in the player's hand, not on its card
-            bool showModel = !SetupInProgress && visible && (weapon.isPlayer || (weapon.equippedTo == null && !Duel.IsUsed(image.TargetName)));
+            // An equipped weapon lives in the player's hand, not on its card; the other weapon cards
+            // (and their class icons) only show while picking, so cards in a hand do not distract
+            bool picking = Duel.Match == null || Duel.Match.Phase == DuelPhase.Pick;
+            bool showModel = !SetupInProgress && visible &&
+                (weapon.isPlayer || (picking && weapon.equippedTo == null && !Duel.IsUsed(image.TargetName)));
             if (!showModel)
             {
                 if (weapon.instance.activeSelf)
@@ -344,6 +352,7 @@ public class CardWeaponManager : MonoBehaviour
                 if (!weapon.instance.activeSelf) weapon.instance.SetActive(true);
                 heldPlayers.Add(weapon);
                 weapon.holdGood = false;
+                weapon.holdTracked = false;
                 if (!tracked || cardSize <= 0f)
                 {
                     weapon.jumpSince = -1f;
@@ -375,6 +384,7 @@ public class CardWeaponManager : MonoBehaviour
                 if (!jump) weapon.jumpSince = -1f;
                 else if (weapon.jumpSince < 0f) weapon.jumpSince = now;
                 weapon.holdGood = !jump || now - weapon.jumpSince >= jumpAcceptTime;
+                weapon.holdTracked = true;
                 weapon.holdPosition = targetPosition;
                 weapon.holdRotation = targetRotation;
                 weapon.holdScale = targetScale;
@@ -415,6 +425,14 @@ public class CardWeaponManager : MonoBehaviour
             else a = player;
         }
 
+        // Cards on one table share its plane: when the two disagree, the one that tilted away from its
+        // character is covered (the pen over it tips the character over), so it is placed from the other
+        if (a != null && b != null && a.holdTracked && b.holdTracked &&
+            Vector3.Angle(a.holdRotation * Vector3.up, b.holdRotation * Vector3.up) > tableTilt)
+        {
+            (TiltFromCharacter(a) > TiltFromCharacter(b) ? a : b).holdGood = false;
+        }
+
         if (a != null && b != null && a.holdGood && b.holdGood)
         {
             Quaternion inverse = Quaternion.Inverse(a.holdRotation);
@@ -452,6 +470,10 @@ public class CardWeaponManager : MonoBehaviour
                 t.localScale = Vector3.Lerp(t.localScale, Vector3.one * player.holdScale, 1f - Mathf.Exp(-scaleSmoothing * dt));
         }
     }
+
+    // How far the card's tracked pose leans from where its character stands (degrees)
+    private static float TiltFromCharacter(SpawnedWeapon player) =>
+        Vector3.Angle(player.holdRotation * Vector3.up, player.instance.transform.rotation * Vector3.up);
 
     private static float CardSize(ImageTargetBehaviour image)
     {

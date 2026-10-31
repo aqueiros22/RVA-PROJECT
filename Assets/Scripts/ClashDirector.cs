@@ -16,6 +16,8 @@ public class ClashDirector : MonoBehaviour
     [Range(0.2f, 0.8f)] public float impactPoint = 0.45f;
     [Tooltip("Freeze on impact (seconds).")]
     public float hitStop = 0.12f;
+    [Tooltip("Longer freeze on the knockout blow (seconds).")]
+    public float knockOutStop = 0.3f;
     [Tooltip("Pause after each exchange (seconds).")]
     public float pauseAfter = 0.9f;
     [Tooltip("Stops waiting for an animation after this long (seconds).")]
@@ -28,8 +30,9 @@ public class ClashDirector : MonoBehaviour
         manager = GetComponent<CardWeaponManager>();
     }
 
-    // onStart runs before each swing, onImpact when the blade connects
-    public IEnumerator Play(IReadOnlyList<DuelMatch.Exchange> exchanges, Action<DuelMatch.Exchange> onStart, Action<DuelMatch.Exchange> onImpact)
+    // onStart runs before each swing, onCry WarCryMicrophone.CryLead before the blade connects, onImpact when it does
+    public IEnumerator Play(IReadOnlyList<DuelMatch.Exchange> exchanges, Action<DuelMatch.Exchange> onStart,
+        Action<DuelMatch.Exchange> onCry, Action<DuelMatch.Exchange> onImpact)
     {
         foreach (var exchange in exchanges)
         {
@@ -44,26 +47,45 @@ public class ClashDirector : MonoBehaviour
             if (exchange.blocked && defender != null) defender.StartGuard(exchange.direction);
 
             float start = Time.unscaledTime;
+            bool cried = false;
             if (swung)
             {
                 while (attacker != null && attacker.AttackProgress() < impactPoint && Time.unscaledTime - start < timeout)
+                {
+                    // Time left until the blade connects, at the swing's pace so far
+                    float progress = attacker.AttackProgress(), elapsed = Time.unscaledTime - start;
+                    if (!cried && progress > 0.02f && (impactPoint - progress) * elapsed / progress <= WarCryMicrophone.CryLead)
+                    {
+                        cried = true;
+                        onCry?.Invoke(exchange);
+                    }
                     yield return null;
+                }
             }
             else
             {
-                yield return new WaitForSecondsRealtime(0.6f);
+                yield return new WaitForSecondsRealtime(0.6f - WarCryMicrophone.CryLead);
+                cried = true;
+                onCry?.Invoke(exchange);
+                yield return new WaitForSecondsRealtime(WarCryMicrophone.CryLead);
             }
-
-            SetPaused(attacker, defender, true);
-            onImpact?.Invoke(exchange);
-            yield return new WaitForSecondsRealtime(hitStop);
-            SetPaused(attacker, defender, false);
+            if (!cried) onCry?.Invoke(exchange);
 
             bool knockedOut = exchange.defenderHealth == 0;
-            if (knockedOut && defender != null)
+            SetPaused(attacker, defender, true);
+            onImpact?.Invoke(exchange);
+            yield return new WaitForSecondsRealtime(knockedOut ? knockOutStop : hitStop);
+            SetPaused(attacker, defender, false);
+
+            if (knockedOut)
             {
-                defender.EndGuard();
-                defender.PlayDeath();
+                // The fall plays on its own: the game is over, nothing waits for it
+                if (defender != null)
+                {
+                    defender.EndGuard();
+                    defender.PlayDeath();
+                }
+                yield break;
             }
 
             // Let the swing finish (progress turns -1 once it blends back to Idle)
@@ -71,7 +93,7 @@ public class ClashDirector : MonoBehaviour
             while (swung && attacker != null && attacker.AttackProgress() >= 0f && attacker.AttackProgress() < 0.95f &&
                    Time.unscaledTime - start < timeout)
                 yield return null;
-            if (!knockedOut && defender != null) defender.EndGuard();
+            if (defender != null) defender.EndGuard();
             yield return new WaitForSecondsRealtime(pauseAfter);
         }
     }
