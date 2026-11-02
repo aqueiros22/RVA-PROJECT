@@ -74,6 +74,7 @@ Damage is rounded to the nearest whole number.
 - [x] Vuforia database with 12 cards: `player1`, `player2`, Player A's deck (`sword`, `axe`, `dagger`, `hammer`, `shield`) and Player B's deck (`sword2`, `axe2`, `dagger2`, `hammer2`, `shield2`). Card labels in English. At most **5 are tracked at the same time** (`VuforiaArenaSetup.MaxTrackedCards`) so the phone doesn't stutter.
 - [x] Player B's II cards use their own 3D models (`Sword2_Container`, `Axe2_Container`, `Dagger2_Container`, `Hammer2_Container`, `Shield2_Container`) with the same `WeaponStats` as Player A's.
 - [x] Characters and weapons appear on their cards, scaled to the card size.
+- [x] Fighting stage (`ArenaStage`, model `Assets/Arena/old-fighting-stage`): while both player cards are seen, the stage stands between them, turned so the players face each other across it and sized from the distance between the cards (`stageWidthPerGap`). The characters stand on its floor. The model is assigned in `CardWeaponManager.arenaPrefab`.
 - [x] Equipping: a weapon card held next to a player card for 0.8 s goes to that character's hand.
 - [x] Per-weapon pose in the hand (`WeaponGrip` component on the weapon prefab).
 - [x] Pen tracking (`ColorGestureTracker`, by Marko): colour blob tracking with motion/background filtering, settling time, marker and trail, EN/PT **Settings** window (language, colour calibration, marker/trail). Reads 4 swipes (up, down, left, right). In a duel it only processes the camera while a gesture is being drawn.

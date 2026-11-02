@@ -27,6 +27,8 @@ public class CardWeaponManager : MonoBehaviour
     public float playerHeightPerCardSize = 1.5f;
     // Idle animation applied to the characters (humanoid)
     public RuntimeAnimatorController playerAnimator;
+    // Fighting stage shown between the two player cards; the characters stand on its floor
+    public GameObject arenaPrefab;
 
     [Header("Equipping (weapon card next to a player card)")]
     // Max distance between card centers to equip, in card lengths (1 = cards touching end to end)
@@ -113,6 +115,9 @@ public class CardWeaponManager : MonoBehaviour
 
     private PlayerSetupUI playerSetup;
     public DuelController Duel { get; private set; }
+    private ArenaStage arena;
+    // Height the characters stand above their cards (the stage floor), in world units
+    private float arenaLift;
 
     void Awake()
     {
@@ -123,6 +128,14 @@ public class CardWeaponManager : MonoBehaviour
         // Shares the Vuforia camera with the gesture tracker.
         if (GetComponent<ColorGestureTracker>() == null)
             gameObject.AddComponent<ColorGestureTracker>();
+        if (arenaPrefab != null)
+        {
+            // Measured at scale 1 before it is hidden
+            GameObject stage = Instantiate(arenaPrefab, Vector3.zero, Quaternion.identity);
+            arena = stage.GetComponent<ArenaStage>();
+            if (arena == null) arena = stage.AddComponent<ArenaStage>();
+            arena.Hide();
+        }
     }
 
     public bool SetupInProgress
@@ -197,6 +210,7 @@ public class CardWeaponManager : MonoBehaviour
             if (weapon.instance != null) Destroy(weapon.instance);
             if (weapon.ring != null) Destroy(weapon.ring.gameObject);
         }
+        if (arena != null) Destroy(arena.gameObject);
     }
 
     private void TrySpawnWeapon(ImageTargetBehaviour trackedImage)
@@ -372,6 +386,7 @@ public class CardWeaponManager : MonoBehaviour
             {
                 targetRotation *= Quaternion.Euler(0f, playerFacingYaw, 0f);
                 heightPerCard = playerHeightPerCardSize;
+                targetPosition += imageTransform.up * arenaLift;
             }
             float targetScale = cardSize * heightPerCard / weapon.baseHeight;
 
@@ -410,7 +425,37 @@ public class CardWeaponManager : MonoBehaviour
         }
 
         if (hold) UpdateHeldPlayers();
+        UpdateArena();
         if (!SetupInProgress) UpdateEquipping();
+    }
+
+    // The stage is fully risen between the two characters (or there is none), so the clash can start
+    public bool ArenaUp => arena == null || arena.Up;
+
+    // The stage rises between the two characters when the duel asks for it (FIGHT) and sinks back
+    // afterwards, so it does not cover the cards the rest of the time. Their cards are found by
+    // taking the lift back off, so the stage does not push itself up through the characters.
+    private void UpdateArena()
+    {
+        if (arena == null) return;
+        Transform a = null, b = null;
+        foreach (var weapon in spawnedWeapons.Values)
+        {
+            if (!weapon.isPlayer || weapon.avatar == null || weapon.instance == null || !weapon.instance.activeSelf) continue;
+            if (weapon.avatar.playerIndex == 1) b = weapon.instance.transform;
+            else a = weapon.instance.transform;
+        }
+        bool raised = Duel != null && Duel.WantsArena;
+        if (a == null || b == null || SetupInProgress || (!raised && (!arena.gameObject.activeSelf || arena.Down)))
+        {
+            arena.Hide();
+            arenaLift = 0f;
+            return;
+        }
+        if (!arena.gameObject.activeSelf) arena.gameObject.SetActive(true);
+        Vector3 up = (a.up + b.up).normalized;
+        arena.Place(a.position - up * arenaLift, b.position - up * arenaLift, up, raised);
+        arenaLift = arena.FloorOffset;
     }
 
     // During the duel the two player cards stay put on the table. A player whose card is clearly

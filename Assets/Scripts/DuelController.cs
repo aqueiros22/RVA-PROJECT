@@ -32,6 +32,9 @@ public class DuelController : MonoBehaviour
     public bool WantsPen => capture == Capture.Countdown || capture == Capture.Armed;
     // Weapons are equipped and the cards stay on the table: players keep their last pose when covered
     public bool HoldsCards => Match != null && !manager.SetupInProgress && Match.Phase != DuelPhase.Pick && Match.Phase != DuelPhase.GameOver;
+    // The stage rises around the players from FIGHT until the next round's recording (or a new match)
+    public bool WantsArena => Match != null && !manager.SetupInProgress && (raisingArena ||
+        Match.Phase == DuelPhase.Clash || Match.Phase == DuelPhase.Result || Match.Phase == DuelPhase.GameOver);
     private CardWeaponManager manager;
     private ColorGestureTracker pen;
     private ClashDirector clash;
@@ -53,6 +56,8 @@ public class DuelController : MonoBehaviour
     private int lastCountdownNumber;
     private float nextComputerAction;
     private DuelPhase previousPhase;
+    // FIGHT was pressed and the stage is rising: the clash starts once it is up
+    private bool raisingArena;
 
     private GameObject hud;
     private Text prompt, subPrompt, bigText, fightText, roundText, banner, bannerUnder;
@@ -367,7 +372,7 @@ public class DuelController : MonoBehaviour
 
     private void Fight()
     {
-        if (Match.Phase != DuelPhase.Fight) return;
+        if (Match.Phase != DuelPhase.Fight || raisingArena) return;
         if (!PlayersReady)
         {
             notice = L("Keep both PLAYER cards (with their weapons) in view.", "Mantém as duas cartas PLAYER (com as armas) visíveis.");
@@ -379,9 +384,13 @@ public class DuelController : MonoBehaviour
 
     private IEnumerator RunClash()
     {
+        // First the stage rises out of the table, then the fight starts (no waiting forever if it cannot show)
+        raisingArena = true;
+        for (float waited = 0f; !manager.ArenaUp && waited < 3f; waited += Time.deltaTime) yield return null;
         knockOutTime = -1f;
         StartCoroutine(RoundBanner());
         var exchanges = Match.Fight();
+        raisingArena = false;
         yield return clash.Play(exchanges, null,
             exchange => PlayCry(exchange.attacker),
             exchange =>
@@ -518,6 +527,7 @@ public class DuelController : MonoBehaviour
     private void Restart()
     {
         StopAllCoroutines();
+        raisingArena = false;
         Match = new DuelMatch();
         shownHealth[0] = shownHealth[1] = 100;
         CancelCapture();
@@ -624,6 +634,7 @@ public class DuelController : MonoBehaviour
                 text = RecordPrompt(out sub);
                 break;
             case DuelPhase.Fight:
+                if (raisingArena) break;
                 text = L("Ready? Press FIGHT!", "Prontos? Carreguem em LUTA!");
                 sub = L("Put the pen away and keep both PLAYER cards in view", "Afastem a caneta e mantenham as cartas PLAYER visíveis");
                 fightButton.gameObject.SetActive(true);
