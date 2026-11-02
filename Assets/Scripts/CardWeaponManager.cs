@@ -13,6 +13,24 @@ public class CardWeaponManager : MonoBehaviour
     public GameObject hammerPrefab;
     public GameObject playerPrefab;
 
+    [Header("Arena (between both player cards)")]
+    public GameObject arenaPrefab;
+    [Min(1.1f)] public float arenaSizePerPlayerDistance = 1.8f;
+    [Min(1f)] public float arenaMinimumSizeInCards = 4f;
+    [Tooltip("Local height of the arena floor, from the bottom of its model bounds (0-1).")]
+    [Range(0f, 1f)] public float arenaFloorFraction = 0f;
+    public bool arenaAutoDetectFloor = true;
+    [Tooltip("Distance below the player cards, as a fraction of the card size. Increase to reveal more of the cards.")]
+    [Min(0f)] public float arenaDepthBelowCards = 0.15f;
+    public float arenaYaw = 0f;
+    [Tooltip("Extra orientation applied around the imported FBX, preserving its original axis conversion.")]
+    public Vector3 arenaOrientationOffset = Vector3.zero;
+    private GameObject arenaInstance;
+    private Transform arenaModel;
+    private Bounds arenaBounds;
+    private float arenaDetectedFloor;
+    private Vector3 appliedArenaOrientation;
+
     [Header("Prefabs of the II cards (sword2, axe2…)")]
     public GameObject sword2Prefab;
     public GameObject axe2Prefab;
@@ -192,6 +210,7 @@ public class CardWeaponManager : MonoBehaviour
 
     void OnDestroy()
     {
+        if (arenaInstance != null) Destroy(arenaInstance);
         foreach (var weapon in spawnedWeapons.Values)
         {
             if (weapon.instance != null) Destroy(weapon.instance);
@@ -411,6 +430,110 @@ public class CardWeaponManager : MonoBehaviour
 
         if (hold) UpdateHeldPlayers();
         if (!SetupInProgress) UpdateEquipping();
+    }
+
+    void LateUpdate()
+    {
+        SpawnedWeapon a = null, b = null;
+        foreach (var player in spawnedWeapons.Values)
+        {
+            if (!player.isPlayer || !player.placed || player.instance == null ||
+                !player.instance.activeInHierarchy || player.avatar == null) continue;
+            if (player.avatar.playerIndex == 0) a = player;
+            if (player.avatar.playerIndex == 1) b = player;
+        }
+        if (SetupInProgress || arenaPrefab == null || a == null || b == null)
+        {
+            if (arenaInstance != null) arenaInstance.SetActive(false);
+            return;
+        }
+
+        if (arenaInstance != null && appliedArenaOrientation != arenaOrientationOffset)
+        {
+            arenaInstance.SetActive(false);
+            Destroy(arenaInstance);
+            arenaInstance = null;
+        }
+        if (arenaInstance == null)
+        {
+            arenaInstance = new GameObject("Arena between players");
+            arenaModel = new GameObject("Arena orientation").transform;
+            arenaModel.SetParent(arenaInstance.transform, false);
+            arenaModel.localPosition = Vector3.zero;
+            arenaModel.localRotation = Quaternion.Euler(arenaOrientationOffset);
+            arenaModel.localScale = Vector3.one;
+            // Keep the imported root's rotation AND scale. FBX axis conversion can
+            // live on that transform; overwriting it changes which side faces up.
+            Instantiate(arenaPrefab, arenaModel, false);
+            appliedArenaOrientation = arenaOrientationOffset;
+            bool measured = false;
+            foreach (var renderer in arenaModel.GetComponentsInChildren<Renderer>())
+            {
+                if (!measured) { arenaBounds = renderer.bounds; measured = true; }
+                else arenaBounds.Encapsulate(renderer.bounds);
+            }
+            if (!measured || Mathf.Min(arenaBounds.size.x, arenaBounds.size.z) < 0.0001f)
+            {
+                Debug.LogError("Arena model needs renderers with non-zero horizontal bounds.", this);
+                Destroy(arenaInstance);
+                arenaPrefab = null;
+                return;
+            }
+            arenaDetectedFloor = DetectArenaFloor();
+        }
+
+        Transform first = a.instance.transform, second = b.instance.transform;
+        Vector3 up = (first.up + second.up).normalized;
+        if (up.sqrMagnitude < 0.001f) up = first.up;
+        Vector3 across = Vector3.ProjectOnPlane(second.position - first.position, up);
+        Vector3 forward = across.sqrMagnitude > 0.000001f
+            ? Vector3.Cross(across.normalized, up) : Vector3.ProjectOnPlane(first.forward, up).normalized;
+        Quaternion rotation = Quaternion.LookRotation(forward, up) * Quaternion.Euler(0f, arenaYaw, 0f);
+        float cardSize = Mathf.Max(CardSize(a.image), CardSize(b.image));
+        float diameter = Mathf.Max(across.magnitude * arenaSizePerPlayerDistance, cardSize * arenaMinimumSizeInCards);
+        float scale = diameter / Mathf.Min(arenaBounds.size.x, arenaBounds.size.z);
+        // Place the model's geometric centre on the midpoint, regardless of its imported pivot.
+        // The floor offset can be tuned for models whose floor is above the bottom of the mesh.
+        Vector3 floorCentre = arenaBounds.center;
+        floorCentre.y = arenaAutoDetectFloor ? arenaDetectedFloor
+            : arenaBounds.min.y + arenaBounds.size.y * arenaFloorFraction;
+        arenaModel.localPosition = -floorCentre;
+        arenaInstance.transform.SetPositionAndRotation((first.position + second.position) * 0.5f
+            - up * (cardSize * arenaDepthBelowCards), rotation);
+        arenaInstance.transform.localScale = Vector3.one * scale;
+        arenaInstance.SetActive(true);
+    }
+
+    // Find the actual horizontal surface under the centre, rather than the bottom
+    // of the foundations. The parent is at identity and the model orientation
+    // correction has already been applied when this runs once.
+    private float DetectArenaFloor()
+    {
+        float floor = float.NegativeInfinity;
+        Vector3 centre = arenaBounds.center;
+        foreach (var filter in arenaModel.GetComponentsInChildren<MeshFilter>())
+        {
+            var mesh = filter.sharedMesh;
+            if (mesh == null || !mesh.isReadable) continue;
+            var vertices = mesh.vertices;
+            var triangles = mesh.triangles;
+            for (int i = 0; i + 2 < triangles.Length; i += 3)
+            {
+                Vector3 a = filter.transform.TransformPoint(vertices[triangles[i]]);
+                Vector3 b = filter.transform.TransformPoint(vertices[triangles[i + 1]]);
+                Vector3 c = filter.transform.TransformPoint(vertices[triangles[i + 2]]);
+                Vector3 normal = Vector3.Cross(b - a, c - a);
+                if (normal.sqrMagnitude < 1e-12f || Mathf.Abs(normal.normalized.y) < 0.9f) continue;
+                float denominator = (b.z - c.z) * (a.x - c.x) + (c.x - b.x) * (a.z - c.z);
+                if (Mathf.Abs(denominator) < 1e-10f) continue;
+                float u = ((b.z - c.z) * (centre.x - c.x) + (c.x - b.x) * (centre.z - c.z)) / denominator;
+                float v = ((c.z - a.z) * (centre.x - c.x) + (a.x - c.x) * (centre.z - c.z)) / denominator;
+                if (u < -0.001f || v < -0.001f || u + v > 1.001f) continue;
+                floor = Mathf.Max(floor, u * a.y + v * b.y + (1f - u - v) * c.y);
+            }
+        }
+        return float.IsNegativeInfinity(floor)
+            ? arenaBounds.min.y + arenaBounds.size.y * arenaFloorFraction : floor;
     }
 
     // During the duel the two player cards stay put on the table. A player whose card is clearly
