@@ -5,7 +5,7 @@ public class WeaponStats : MonoBehaviour
 {
     public WeaponClass weaponClass = WeaponClass.Light;
     // Damage dealt by an attack with this weapon, before the class multiplier
-    public int baseDamage = 20;
+    public int baseDamage = 25;
 
     // Light beats Heavy, Heavy beats Defense, Defense beats Light
     public static WeaponClass StrongAgainst(WeaponClass weaponClass)

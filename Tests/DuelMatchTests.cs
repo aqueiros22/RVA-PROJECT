@@ -56,9 +56,81 @@ public static class DuelMatchTests
         Check(PenStroke.Classify(.5f, .5f, .58f, .5f, 2f, .15f, 1.3f) == AttackDirection.Right, "Landscape: width counts more");
     }
 
+    private static DuelMatch AbilityMatch(string a, WeaponClass ac, int ad, string b, WeaponClass bc, int bd,
+        AttackDirection attackA, AttackDirection defenseA, AttackDirection attackB, AttackDirection defenseB,
+        AttackDirection? secondA = null, AttackDirection? secondB = null, float cry = 0)
+    {
+        var match = new DuelMatch();
+        Check(match.Equip(0, Card(a, ac, ad)) && match.Equip(1, Card(b + "2", bc, bd)), "Ability weapons equipped");
+        for (int i = 0; i < 4; i++)
+        {
+            int player = match.CurrentPlayer;
+            var slot = match.CurrentSlot;
+            var dir = slot == GestureSlot.Attack ? (player == 0 ? attackA : attackB) : (player == 0 ? defenseA : defenseB);
+            Check(match.Record(player, slot, dir, cry), "Ability gesture recorded");
+            if (match.NeedsSecondDirection)
+            {
+                Check(!match.ConfirmStep(), "Multi attack cannot confirm without second direction");
+                Check(!match.Record(player, slot, dir, 0, true), "Duplicate secondary rejected");
+                Check(match.Record(player, slot, (player == 0 ? secondA : secondB).Value, 0, true), "Second direction recorded");
+                Check(match.WarCryPower(player) == cry, "Secondary preserves cry");
+            }
+            Check(match.ConfirmStep(), "Ability step confirmed");
+        }
+        match.Fight();
+        return match;
+    }
+
+    private static void AbilityTests()
+    {
+        var shield = Card("shield2", WeaponClass.Defense, 15);
+        foreach (AttackDirection attack in Enum.GetValues(typeof(AttackDirection)))
+        foreach (AttackDirection defense in Enum.GetValues(typeof(AttackDirection)))
+        {
+            bool verticalA = attack == AttackDirection.Up || attack == AttackDirection.Down;
+            bool verticalD = defense == AttackDirection.Up || defense == AttackDirection.Down;
+            Check(DuelMatch.BlocksDirection(shield, attack, defense) == (verticalA == verticalD), "Shield axis coverage");
+            Check(DuelMatch.BlocksDirection(Card("sword", WeaponClass.Light, 25), attack, defense) == (attack == defense), "Others block exact direction");
+            Check(!DuelMatch.ValidSecondary(Card("axe", WeaponClass.Heavy, 30), attack, defense), "Axe never asks for a second gesture");
+        }
+        var dagger = AbilityMatch("dagger", WeaponClass.Light, 25, "test", WeaponClass.Light, 0,
+            AttackDirection.Up, AttackDirection.Left, AttackDirection.Right, AttackDirection.Down, AttackDirection.Down);
+        Check(dagger.Exchanges.Count == 3 && dagger.Exchanges[0].damage == 12 && dagger.Exchanges[1].blocked && dagger.Exchanges[1].damage == 0, "Dagger separate blocks and odd allocation");
+        var cleave = AbilityMatch("axe", WeaponClass.Heavy, 30, "shield", WeaponClass.Defense, 15,
+            AttackDirection.Up, AttackDirection.Up, AttackDirection.Left, AttackDirection.Down, AttackDirection.Left, null, 1);
+        Check(cleave.Exchanges[0].blocked && cleave.Exchanges[1].blocked && cleave.Exchanges[0].damage == 0 && cleave.Exchanges[1].damage == 0, "Shield axis blocks both opposite axe strikes");
+        foreach (AttackDirection direction in Enum.GetValues(typeof(AttackDirection)))
+        {
+            Check(DuelMatch.Opposite(DuelMatch.Opposite(direction)) == direction && DuelMatch.Opposite(direction) != direction, "Opposite mapping");
+            var axeHit = AbilityMatch("axe", WeaponClass.Heavy, 30, "test", WeaponClass.Heavy, 0,
+                direction, direction, DuelMatch.Opposite(direction), direction);
+            Check(axeHit.Exchanges[0].blocked && axeHit.Exchanges[1].direction == DuelMatch.Opposite(direction) && axeHit.Exchanges[1].damage == 9, "Axe automatic opposite strike hits for 30% after blocked primary");
+            var primaryHit = AbilityMatch("axe", WeaponClass.Heavy, 30, "test", WeaponClass.Heavy, 0,
+                direction, direction, direction, DuelMatch.Opposite(direction));
+            Check(primaryHit.Exchanges[0].damage == 21 && primaryHit.Exchanges[1].blocked, "Axe primary hits for 70% while opposite is blocked");
+        }
+        var counter = AbilityMatch("hammer", WeaponClass.Heavy, 30, "sword", WeaponClass.Light, 25,
+            AttackDirection.Up, AttackDirection.Down, AttackDirection.Left, AttackDirection.Up);
+        Check(counter.Exchanges[0].blocked && counter.Exchanges[0].damage == 5, "Hammer chip damage");
+        Check(counter.Exchanges[1].counterattack && counter.Exchanges[1].damage == 4 && counter.Exchanges[1].attacker == 1, "Sword counters pre-block damage without extra multipliers");
+        var swords = AbilityMatch("sword", WeaponClass.Light, 25, "sword", WeaponClass.Light, 25,
+            AttackDirection.Up, AttackDirection.Up, AttackDirection.Up, AttackDirection.Up);
+        Check(swords.Exchanges.Count == 4 && swords.Health(0) == 95 && swords.Health(1) == 95, "Sword counters never recurse");
+        var fatalCounter = AbilityMatch("dagger", WeaponClass.Light, 1000, "sword", WeaponClass.Light, 25,
+            AttackDirection.Up, AttackDirection.Down, AttackDirection.Right, AttackDirection.Up, AttackDirection.Left);
+        Check(fatalCounter.Exchanges.Count == 2 && fatalCounter.Health(0) == 0 && fatalCounter.Health(1) == 100, "Counter KO cancels second strike and next normal attack");
+        var fatalChip = AbilityMatch("hammer", WeaponClass.Heavy, 1000, "sword", WeaponClass.Light, 25,
+            AttackDirection.Up, AttackDirection.Down, AttackDirection.Left, AttackDirection.Up);
+        Check(fatalChip.Exchanges.Count == 1 && fatalChip.Health(1) == 0, "Lethal chip prevents counter");
+        var both = AbilityMatch("dagger", WeaponClass.Light, 25, "dagger", WeaponClass.Light, 25,
+            AttackDirection.Up, AttackDirection.Left, AttackDirection.Down, AttackDirection.Left, AttackDirection.Right, AttackDirection.Right);
+        Check(both.Exchanges.Count == 4 && both.Health(0) == 75 && both.Health(1) == 75, "Both multi attacks preserve total normal budget");
+    }
+
     public static int Main()
     {
         StrokeTests();
+        AbilityTests();
         var axe = Card("axe", WeaponClass.Heavy, 50);
         var hammer = Card("hammer", WeaponClass.Heavy, 50);
         var sword = Card("sword", WeaponClass.Light, 40);
@@ -67,7 +139,7 @@ public static class DuelMatchTests
         Check(DuelMatch.CalculateDamage(sword, shield, true) == 0, "Sword vs shield blocked = 0");
         Check(DuelMatch.CalculateDamage(shield, sword, false) == 30, "Shield vs sword = 30");
         Check(DuelMatch.CalculateDamage(hammer, axe, false) == 50, "Hammer vs axe = 50");
-        Check(DuelMatch.CalculateDamage(hammer, axe, true, 1) == 0, "A block stops all damage, even a full cry");
+        Check(DuelMatch.CalculateDamage(hammer, axe, true, 1) == 19, "Hammer penetrates a full-cry block");
         Check(DuelMatch.CalculateDamage(Card("s", WeaponClass.Light, 21), Card("h", WeaponClass.Heavy, 50), false) == 32, "31.5 rounds up to 32");
         foreach (WeaponClass a in Enum.GetValues(typeof(WeaponClass)))
         foreach (WeaponClass d in Enum.GetValues(typeof(WeaponClass)))
@@ -91,7 +163,7 @@ public static class DuelMatchTests
         Check(match.Health(0) == 100 && match.Health(1) == 100, "Initial HP");
         Check(!match.Record(0, GestureSlot.Attack, AttackDirection.Up), "No gestures during pick");
         Check(!match.Equip(1, sword), "Wrong deck rejected");
-        string[] ids = { "sword", "dagger", "hammer" };
+        string[] ids = { "testA", "testB", "testC" };
         for (int round = 1; round <= 3; round++)
         {
             Check(match.Round == round, "Round progression");
@@ -144,8 +216,8 @@ public static class DuelMatchTests
         Check(WarCryRules.Power(0) == 1 && WarCryRules.Power(float.NaN) == 0, "Cry power bounded and NaN safe");
         Check(DuelMatch.CalculateDamage(Card("sword", WeaponClass.Light, 40), Card("sword2", WeaponClass.Light, 40), false, 1) == 60, "Full cry gives x1.5 damage");
         var cry = new DuelMatch();
-        cry.Equip(0, Card("sword", WeaponClass.Light, 20));
-        cry.Equip(1, Card("sword2", WeaponClass.Light, 20));
+        cry.Equip(0, Card("test", WeaponClass.Light, 20));
+        cry.Equip(1, Card("test2", WeaponClass.Light, 20));
         Check(!cry.Record(1, GestureSlot.Attack, AttackDirection.Up, 1) && cry.WarCryPower(1) == 0, "Out of turn cannot charge cry");
         Check(cry.Record(0, GestureSlot.Attack, AttackDirection.Up, 1), "Store attack cry");
         cry.Record(0, GestureSlot.Attack, AttackDirection.Up, .5f);

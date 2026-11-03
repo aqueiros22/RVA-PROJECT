@@ -46,7 +46,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WeaponStats
   weaponClass: 1
-  baseDamage: 50
+  baseDamage: 30
 --- !u!1001 &2776278790542026952
 PrefabInstance:
   m_ObjectHideFlags: 0

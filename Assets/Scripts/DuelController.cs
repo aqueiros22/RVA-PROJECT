@@ -65,6 +65,9 @@ public class DuelController : MonoBehaviour
     // When the knockout blow landed this match (-1: none yet)
     private float knockOutTime = -1f;
     private GameObject promptBox;
+    private Text abilityTitle, abilityDescription;
+    private GameObject abilityPanel;
+    private DuelMatch.Exchange activeExchange;
     private readonly Button[] buttons = new Button[2];
     private readonly Text[] buttonTexts = new Text[2];
     private readonly System.Action[] buttonActions = new System.Action[2];
@@ -152,7 +155,11 @@ public class DuelController : MonoBehaviour
             // Simulate a microphone level with the same threshold and damage curve as humans.
             float simulatedPower = Match.CurrentSlot == GestureSlot.Attack
                 ? WarCryRules.Power(Random.Range(-45f, -5f), warCry.thresholdDb, warCry.fullPowerDb) : 0;
-            Match.Record(Match.CurrentPlayer, Match.CurrentSlot, (AttackDirection)Random.Range(0, 4), simulatedPower);
+            bool secondary = Match.NeedsSecondDirection;
+            AttackDirection direction;
+            do { direction = (AttackDirection)Random.Range(0, 4); }
+            while (secondary && !DuelMatch.ValidSecondary(Match.Equipped(Match.CurrentPlayer), Match.PrimaryDirection.Value, direction));
+            Match.Record(Match.CurrentPlayer, Match.CurrentSlot, direction, simulatedPower, secondary);
             Match.ConfirmStep();
             CancelCapture();
         }
@@ -186,7 +193,7 @@ public class DuelController : MonoBehaviour
     {
         if (Match.Phase != DuelPhase.Record) return;
         DropPendingCry();
-        if (Match.CurrentSlot == GestureSlot.Attack) warCry.Begin();
+        if (Match.CurrentSlot == GestureSlot.Attack && !Match.NeedsSecondDirection) warCry.Begin();
         capture = Capture.Countdown;
         captureEnd = Time.unscaledTime + countdownSeconds;
         penWaitEnd = Time.unscaledTime + penWaitSeconds;
@@ -228,7 +235,7 @@ public class DuelController : MonoBehaviour
         }
         else if (capture == Capture.Armed)
         {
-            warCry.SetMeasuring(Match.CurrentSlot == GestureSlot.Attack && Time.timeScale > 0);
+            warCry.SetMeasuring(Match.CurrentSlot == GestureSlot.Attack && !Match.NeedsSecondDirection && Time.timeScale > 0);
             warCry.Sample();
             if (pen != null && pen.TipVisible)
             {
@@ -264,8 +271,14 @@ public class DuelController : MonoBehaviour
 
     private void Review(AttackDirection direction)
     {
+        if (Match.NeedsSecondDirection && !DuelMatch.ValidSecondary(Match.Equipped(Match.CurrentPlayer), Match.PrimaryDirection.Value, direction))
+        {
+            CancelCapture();
+            notice = L("Invalid second direction: try again.", "Segunda direção inválida: tenta outra vez.");
+            return;
+        }
         DropPendingCry();
-        if (Match.CurrentSlot == GestureSlot.Attack)
+        if (Match.CurrentSlot == GestureSlot.Attack && !Match.NeedsSecondDirection)
         {
             // The bonus is set by the drag; the recording goes on a moment for the end of the shout
             pendingCryPower = warCry.PeakPower;
@@ -284,14 +297,15 @@ public class DuelController : MonoBehaviour
     {
         if (capture != Capture.Review) return;
         int player = Match.CurrentPlayer;
-        if (Match.CurrentSlot == GestureSlot.Attack)
+        bool secondary = Match.NeedsSecondDirection;
+        if (Match.CurrentSlot == GestureSlot.Attack && !secondary)
         {
             FinishCry();
             if (cryClips[player] != null) Destroy(cryClips[player]);
             cryClips[player] = pendingCry;
             pendingCry = null;
         }
-        Match.Record(player, Match.CurrentSlot, pendingDirection, pendingCryPower);
+        if (!Match.Record(player, Match.CurrentSlot, pendingDirection, pendingCryPower, secondary)) return;
         Match.ConfirmStep();
         DropPendingCry();
         capture = Capture.None;
@@ -345,7 +359,7 @@ public class DuelController : MonoBehaviour
         for (int i = 0; i < 2; i++)
         {
             float power = Match.WarCryPower(i);
-            if (Match.Phase == DuelPhase.Record && Match.CurrentPlayer == i && Match.CurrentSlot == GestureSlot.Attack)
+            if (Match.Phase == DuelPhase.Record && Match.CurrentPlayer == i && Match.CurrentSlot == GestureSlot.Attack && !Match.NeedsSecondDirection)
                 power = capture == Capture.Armed ? warCry.PeakPower : capture == Capture.Review ? pendingCryPower : 0;
             if (Match.Phase == DuelPhase.Result || Match.Phase == DuelPhase.GameOver) power = 0;
             manager.GetAvatar(i)?.SetWarCryPower(power);
@@ -391,8 +405,8 @@ public class DuelController : MonoBehaviour
         StartCoroutine(RoundBanner());
         var exchanges = Match.Fight();
         raisingArena = false;
-        yield return clash.Play(exchanges, null,
-            exchange => PlayCry(exchange.attacker),
+        yield return clash.Play(exchanges, exchange => activeExchange = exchange,
+            exchange => { if (!exchange.counterattack && exchange.strikeIndex == 0) PlayCry(exchange.attacker); },
             exchange =>
             {
                 shownHealth[exchange.Defender] = exchange.defenderHealth;
@@ -410,9 +424,10 @@ public class DuelController : MonoBehaviour
                     ShowBanner("K.O.!", KnockOutColor, L($"{ColoredName(exchange.attacker)} wins!", $"{ColoredName(exchange.attacker)} venceu!"));
                     Flash(new Color(0.95f, 0.1f, 0.05f, 0.45f));
                 }
-                // Red only when hit: a block costs nothing, so no flash
-                else if (!exchange.blocked) Flash(new Color(0.95f, 0.15f, 0.15f, 0.2f));
+                // Hammer chip damage also flashes on a successful block.
+                else if (exchange.damage > 0) Flash(new Color(0.95f, 0.15f, 0.15f, 0.2f));
             });
+        activeExchange = null;
         Match.FinishClash();
 
         // A K.O. or the last round: straight to the winner, no result screen
@@ -496,8 +511,15 @@ public class DuelController : MonoBehaviour
         else if (exchange.blocked) { tag = L("BLOCKED", "BLOQUEADO"); tagColor = Color.white; }
         else if (exchange.classMultiplier > 1) { tag = L("CRITICAL!", "CRÍTICO!"); tagColor = new Color(1f, 0.82f, 0.2f); }
         else if (exchange.classMultiplier < 1) { tag = L("Not very effective...", "Pouco efetivo..."); tagColor = new Color(0.75f, 0.75f, 0.75f); }
-        // A block stops all the damage: no "-0", only the tag
-        string value = exchange.blocked ? "" : $"-{exchange.damage}";
+        // Full blocks show only the tag; hammer chip damage still shows its value.
+        string value = exchange.damage == 0 ? "" : $"-{exchange.damage}";
+        string ability = AbilityName(exchange.ability);
+        if (exchange.counterattack) tag = L("COUNTERATTACK", "CONTRA-ATAQUE");
+        else if (exchange.ability == WeaponAbility.Hammer && exchange.blocked) tag = L("CRUSHING BLOW · BLOCKED", "GOLPE ESMAGADOR · BLOQUEADO");
+        else if (exchange.ability == WeaponAbility.Dagger || exchange.ability == WeaponAbility.Axe)
+            tag = $"{ability} {exchange.strikeIndex + 1}/2 · {Arrow(exchange.direction)}" + (exchange.blocked ? L(" BLOCKED", " BLOQUEADO") : "");
+        else if (exchange.blocked && Match.Equipped(exchange.Defender).Ability == WeaponAbility.Shield)
+            tag = L("SHIELD · BLOCKED", "ESCUDO · BLOQUEADO");
         // Floats away from the attacker, beside the defender rather than over their name
         var attacker = manager.GetAvatar(exchange.attacker);
         float side = 1f;
@@ -632,6 +654,7 @@ public class DuelController : MonoBehaviour
                 break;
             case DuelPhase.Record:
                 text = RecordPrompt(out sub);
+
                 break;
             case DuelPhase.Fight:
                 if (raisingArena) break;
@@ -661,6 +684,7 @@ public class DuelController : MonoBehaviour
         }
         bool hasNotice = !string.IsNullOrEmpty(notice);
         if (hasNotice) sub = notice;
+        RefreshAbilityPanel();
         prompt.text = text;
         subPrompt.text = sub;
         subPrompt.color = hasNotice ? NoticeColor : SubColor;
@@ -679,7 +703,7 @@ public class DuelController : MonoBehaviour
             case Capture.Countdown:
                 bigText.text = Mathf.CeilToInt(captureEnd - Time.unscaledTime).ToString();
                 SetButton(Left, L("Cancel", "Cancelar"), CancelCapture);
-                if (attack) sub = L("Get ready to shout!", "Prepara-te para gritar!");
+                if (attack && !Match.NeedsSecondDirection) sub = L("Get ready to shout!", "Prepara-te para gritar!");
                 return PenInSquare()
                     ? L("Pen found - hold it there", "Caneta encontrada - mantém-na aí")
                     : L("Put the pen tip in the square", "Põe a ponta da caneta no quadrado");
@@ -689,7 +713,7 @@ public class DuelController : MonoBehaviour
                 // The cry and the time left on the big line, how to drag under it
                 string seconds = $"{Mathf.CeilToInt(captureEnd - Time.unscaledTime)} s";
                 string drag = L("Drag the pen up, down, left or right", "Arrasta a caneta para cima, baixo, esquerda ou direita");
-                if (!attack) return $"{drag}  ·  {seconds}";
+                if (!attack || Match.NeedsSecondDirection) return $"{drag}  ·  {seconds}";
                 sub = drag;
                 return $"{CryFeedback()}  ·  {seconds}";
             case Capture.Review:
@@ -697,16 +721,93 @@ public class DuelController : MonoBehaviour
                 SetButton(Right, L("Confirm", "Confirmar"), ConfirmGesture);
                 sub = L("Redo it or confirm", "Repete ou confirma");
                 string slot = attack ? L("Attack", "Ataque") : L("Defense", "Defesa");
-                string cry = attack && pendingCryPower > 0 ? L($"  ·  War cry {Times(pendingCryPower)}", $"  ·  Grito {Times(pendingCryPower)}") : "";
-                return $"{slot}: {Arrow(pendingDirection)} {DirectionName(pendingDirection)}{cry}";
+                float reviewPower = Match.NeedsSecondDirection ? Match.WarCryPower(me) : pendingCryPower;
+                string cry = attack && reviewPower > 0 ? L($"  ·  War cry {Times(reviewPower)}", $"  ·  Grito {Times(reviewPower)}") : "";
+                if (attack && Match.Equipped(me).Ability == WeaponAbility.Axe)
+                    return $"{slot}: {Arrow(pendingDirection)} 70% + {Arrow(DuelMatch.Opposite(pendingDirection))} 30%{cry}";
+                string primary = Match.NeedsSecondDirection ? $"{Arrow(Match.PrimaryDirection.Value)} + " : "";
+                return $"{slot}: {primary}{Arrow(pendingDirection)} {DirectionName(pendingDirection)}{cry}";
         }
 
         SetButton(Right, L("Detect pen", "Detetar caneta"), DetectPen);
         if (!ArenaMenu.IsComputer(other)) sub = L($"{ColoredName(other)}, don't look!", $"{ColoredName(other)}, não olhes!");
         // The pen changes hands once, after the first player's defense
         if (Match.Step == 2) sub = L($"Pass the pen to {ColoredName(me)}", $"Passa a caneta a {ColoredName(me)}") + (sub.Length > 0 ? "  ·  " + sub : "");
+        if (Match.NeedsSecondDirection)
+            return L($"{ColoredName(me)}: second attack after {Arrow(Match.PrimaryDirection.Value)}", $"{ColoredName(me)}: segundo ataque após {Arrow(Match.PrimaryDirection.Value)}");
         return attack ? L($"{ColoredName(me)}: draw your attack", $"{ColoredName(me)}: desenha o ataque")
                       : L($"{ColoredName(me)}: draw your defense", $"{ColoredName(me)}: desenha a defesa");
+    }
+
+    private static string AbilityName(WeaponAbility ability)
+    {
+        switch (ability)
+        {
+            case WeaponAbility.Dagger: return L("DOUBLE STRIKE", "ATAQUE DUPLO");
+            case WeaponAbility.Axe: return L("CLEAVE", "GOLPE EM ARCO");
+            case WeaponAbility.Hammer: return L("CRUSHING BLOW", "GOLPE ESMAGADOR");
+            case WeaponAbility.Sword: return L("COUNTERATTACK", "CONTRA-ATAQUE");
+            default: return L("SHIELD", "ESCUDO");
+        }
+    }
+
+    private string AbilityHint(DuelMatch.Card card, bool attack)
+    {
+        string hint;
+        switch (card.Ability)
+        {
+            case WeaponAbility.Dagger:
+                hint = attack ? L("Two different directions · 50% each", "Duas direções diferentes · 50% cada") : L("Defense: one direction", "Defesa: uma direção"); break;
+            case WeaponAbility.Axe:
+                hint = attack ? L("ONE gesture: 70% in that direction + 30% in the OPPOSITE direction", "UM gesto: 70% nessa direção + 30% na direção OPOSTA") : L("Defense: one direction", "Defesa: uma direção"); break;
+            case WeaponAbility.Hammer:
+                hint = L("Crushing Blow: blocked hits still deal 25%", "Golpe Esmagador: causa 25% mesmo bloqueado"); break;
+            case WeaponAbility.Sword:
+                hint = L("Successful block: counter for 20% of incoming damage", "Bloqueio correto: contra-ataque de 20% do dano recebido"); break;
+            default:
+                hint = L("Shield: Up/Down protects both · Left/Right protects both", "Escudo: cima/baixo protege ambos · esquerda/direita protege ambos"); break;
+        }
+        return $"{card.damage} {L("base damage", "dano base")} · {hint}";
+    }
+
+    // Persistent, high-contrast ability card, separate from pen and war-cry instructions.
+    private void RefreshAbilityPanel()
+    {
+        abilityPanel.SetActive(Match.Phase == DuelPhase.Pick || Match.Phase == DuelPhase.Record ||
+            Match.Phase == DuelPhase.Fight || Match.Phase == DuelPhase.Clash);
+        if (Match.Phase == DuelPhase.Record)
+        {
+            var card = Match.Equipped(Match.CurrentPlayer);
+            abilityTitle.text = $"{ColoredName(Match.CurrentPlayer)} | {AbilityName(card.Ability)}";
+            abilityDescription.text = AbilityHint(card, true);
+        }
+        else if (Match.Phase == DuelPhase.Clash && activeExchange != null)
+        {
+            var hit = activeExchange;
+            abilityTitle.text = $"{ColoredName(hit.attacker)} | {AbilityName(hit.ability)}";
+            if (hit.counterattack)
+                abilityDescription.text = L($"Successful block! Automatic counter: {hit.damage} damage", $"Bloqueio correto! Contra-ataque automático: {hit.damage} de dano");
+            else
+            {
+                string portion = hit.ability == WeaponAbility.Axe ? (hit.strikeIndex == 0 ? "70%" : "30%") : hit.ability == WeaponAbility.Dagger ? "50%" : "100%";
+                string result = hit.blocked ? (hit.damage > 0 ? L("BLOCKED - 25% penetrates", "BLOQUEADO - 25% atravessa") : L("BLOCKED", "BLOQUEADO")) : L("HIT", "ACERTOU");
+                abilityDescription.text = $"{Arrow(hit.direction)} {DirectionName(hit.direction)} | {portion} | {result} | -{hit.damage} HP";
+            }
+        }
+        else
+        {
+            abilityTitle.text = L("WEAPON POWERS", "PODERES DAS ARMAS");
+            string details = "";
+            for (int player = 0; player < 2; player++)
+            {
+                var card = Match.Equipped(player);
+                if (card != null)
+                    details += (details.Length > 0 ? "\n" : "") + $"{ColoredName(player)}: <color=#FFCB71>{AbilityName(card.Ability)}</color> - {AbilityHint(card, true)}";
+            }
+            abilityDescription.text = details.Length > 0 ? details : L(
+                "Sword: counter 20% | Dagger: two directions 50/50 | Axe: opposite 70/30\nHammer: 25% through blocks | Shield: blocks both directions on one axis",
+                "Espada: contra-ataque 20% | Adaga: duas direções 50/50 | Machado: opostas 70/30\nMartelo: 25% atravessa bloqueios | Escudo: protege ambas as direções de um eixo");
+        }
     }
 
     private void SetButton(int slot, string label, System.Action action)
@@ -814,6 +915,23 @@ public class DuelController : MonoBehaviour
         roundText.alignment = TextAnchor.MiddleLeft;
         Shadow(roundText);
 
+        var powerBox = Box(hud.transform, "Weapon Power", new Vector2(0.12f, 0.85f), new Vector2(0.88f, 0.99f), Vector2.zero, Vector2.zero);
+        powerBox.color = new Color(0.06f, 0.035f, 0.01f, 0.94f);
+        powerBox.raycastTarget = false;
+        abilityPanel = powerBox.gameObject;
+        var powerOutline = powerBox.gameObject.AddComponent<Outline>();
+        powerOutline.effectColor = FightColor;
+        powerOutline.effectDistance = new Vector2(2, -2);
+        abilityTitle = Label(powerBox.transform, 30);
+        abilityTitle.supportRichText = true;
+        abilityTitle.fontStyle = FontStyle.Bold;
+        abilityTitle.color = FightColor;
+        Rect(abilityTitle.rectTransform, new Vector2(0, 0.58f), Vector2.one, new Vector2(12, 0), new Vector2(-12, -4));
+        abilityDescription = Label(powerBox.transform, 24);
+        abilityDescription.supportRichText = true;
+        abilityDescription.resizeTextMinSize = 16;
+        Rect(abilityDescription.rectTransform, Vector2.zero, new Vector2(1, 0.58f), new Vector2(12, 4), new Vector2(-12, 0));
+
         // Countdown and "DRAG!"
         bigText = Label(hud.transform, 64);
         Rect(bigText.rectTransform, new Vector2(0.05f, 0.66f), new Vector2(0.95f, 0.84f), Vector2.zero, Vector2.zero);
@@ -863,6 +981,7 @@ public class DuelController : MonoBehaviour
 
         // Bottom row: secondary button on the left, text in the middle, main button on the right
         var box = Box(hud.transform, "Turn Prompt", new Vector2(0.21f, 0), new Vector2(0.79f, 0), new Vector2(0, 10), new Vector2(0, 130));
+        box.rectTransform.offsetMax = new Vector2(0, 174);
         box.color = PromptColor;
         box.raycastTarget = false;
         promptBox = box.gameObject;
