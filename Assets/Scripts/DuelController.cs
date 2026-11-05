@@ -85,7 +85,7 @@ public class DuelController : MonoBehaviour
     private static readonly Color FightTextColor = new Color(0.25f, 0.12f, 0.03f);
     private static readonly Color KnockOutColor = new Color(1f, 0.2f, 0.12f);
     private static readonly Color WinnerColor = new Color(1f, 0.82f, 0.25f);
-    private static readonly Color PromptColor = new Color(0f, 0f, 0f, 0.6f);
+    private static readonly Color PromptColor = new Color(0.035f, 0.045f, 0.065f, 0.94f);
     private static readonly Color ButtonColor = new Color(0.5f, 0.36f, 0.06f, 0.92f);
     private static readonly Color PrimaryColor = new Color(0.12f, 0.55f, 0.25f, 0.95f);
     private static readonly Color TraceColor = new Color(1f, 0.85f, 0.2f);
@@ -685,10 +685,15 @@ public class DuelController : MonoBehaviour
         bool hasNotice = !string.IsNullOrEmpty(notice);
         if (hasNotice) sub = notice;
         RefreshAbilityPanel();
+        bool capturing = phase == DuelPhase.Record && (capture == Capture.Countdown || capture == Capture.Armed);
+        Rect(prompt.rectTransform, new Vector2(0, 1), Vector2.one,
+            new Vector2(16, capturing ? -76 : -56), new Vector2(-16, capturing ? -36 : -10));
+        Rect(subPrompt.rectTransform, new Vector2(0, 1), Vector2.one,
+            new Vector2(16, -108), new Vector2(-16, capturing ? -76 : -56));
         prompt.text = text;
         subPrompt.text = sub;
         subPrompt.color = hasNotice ? NoticeColor : SubColor;
-        promptBox.SetActive(text.Length > 0 || sub.Length > 0);
+        promptBox.SetActive(text.Length > 0 || sub.Length > 0 || abilityPanel.activeSelf);
     }
 
     // Headline: who records what; sub: who must look away, the cry, the time left
@@ -770,7 +775,7 @@ public class DuelController : MonoBehaviour
         return $"{card.damage} {L("base damage", "dano base")} · {hint}";
     }
 
-    // Persistent, high-contrast ability card, separate from pen and war-cry instructions.
+    // Contextual card abilities share the bottom instruction panel.
     private void RefreshAbilityPanel()
     {
         abilityPanel.SetActive(Match.Phase == DuelPhase.Pick || Match.Phase == DuelPhase.Record ||
@@ -778,7 +783,7 @@ public class DuelController : MonoBehaviour
         if (Match.Phase == DuelPhase.Record)
         {
             var card = Match.Equipped(Match.CurrentPlayer);
-            abilityTitle.text = $"{ColoredName(Match.CurrentPlayer)} | {AbilityName(card.Ability)}";
+            abilityTitle.text = AbilityName(card.Ability);
             abilityDescription.text = AbilityHint(card, true);
         }
         else if (Match.Phase == DuelPhase.Clash && activeExchange != null)
@@ -796,7 +801,7 @@ public class DuelController : MonoBehaviour
         }
         else
         {
-            abilityTitle.text = L("WEAPON POWERS", "PODERES DAS ARMAS");
+            abilityTitle.text = L("CARD ABILITIES", "HABILIDADES DAS CARTAS");
             string details = "";
             for (int player = 0; player < 2; player++)
             {
@@ -915,23 +920,6 @@ public class DuelController : MonoBehaviour
         roundText.alignment = TextAnchor.MiddleLeft;
         Shadow(roundText);
 
-        var powerBox = Box(hud.transform, "Weapon Power", new Vector2(0.12f, 0.85f), new Vector2(0.88f, 0.99f), Vector2.zero, Vector2.zero);
-        powerBox.color = new Color(0.06f, 0.035f, 0.01f, 0.94f);
-        powerBox.raycastTarget = false;
-        abilityPanel = powerBox.gameObject;
-        var powerOutline = powerBox.gameObject.AddComponent<Outline>();
-        powerOutline.effectColor = FightColor;
-        powerOutline.effectDistance = new Vector2(2, -2);
-        abilityTitle = Label(powerBox.transform, 30);
-        abilityTitle.supportRichText = true;
-        abilityTitle.fontStyle = FontStyle.Bold;
-        abilityTitle.color = FightColor;
-        Rect(abilityTitle.rectTransform, new Vector2(0, 0.58f), Vector2.one, new Vector2(12, 0), new Vector2(-12, -4));
-        abilityDescription = Label(powerBox.transform, 24);
-        abilityDescription.supportRichText = true;
-        abilityDescription.resizeTextMinSize = 16;
-        Rect(abilityDescription.rectTransform, Vector2.zero, new Vector2(1, 0.58f), new Vector2(12, 4), new Vector2(-12, 0));
-
         // Countdown and "DRAG!"
         bigText = Label(hud.transform, 64);
         Rect(bigText.rectTransform, new Vector2(0.05f, 0.66f), new Vector2(0.95f, 0.84f), Vector2.zero, Vector2.zero);
@@ -956,7 +944,7 @@ public class DuelController : MonoBehaviour
         Shadow(bannerUnder);
 
         // FIGHT: a rounded gold button above the prompt, clear of the characters
-        fightButton = MakeButton(hud.transform, "Fight", new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(-150, 144), new Vector2(150, 230), out fightText, 46);
+        fightButton = MakeButton(hud.transform, "Fight", new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(-150, 240), new Vector2(150, 316), out fightText, 46);
         var fightImage = fightButton.GetComponent<Image>();
         fightImage.sprite = RoundedSprite();
         fightImage.type = Image.Type.Sliced;
@@ -979,25 +967,50 @@ public class DuelController : MonoBehaviour
         }
         fightButton.onClick.AddListener(Fight);
 
-        // Bottom row: secondary button on the left, text in the middle, main button on the right
-        var box = Box(hud.transform, "Turn Prompt", new Vector2(0.21f, 0), new Vector2(0.79f, 0), new Vector2(0, 10), new Vector2(0, 130));
-        box.rectTransform.offsetMax = new Vector2(0, 174);
+        // One bottom panel: current action, instructions, then card abilities.
+        var box = Box(hud.transform, "Turn Prompt", new Vector2(0.21f, 0), new Vector2(0.79f, 0), new Vector2(0, 12), new Vector2(0, 228));
+        box.sprite = fightImage.sprite;
+        box.type = Image.Type.Sliced;
         box.color = PromptColor;
         box.raycastTarget = false;
         promptBox = box.gameObject;
-        prompt = Label(box.transform, 30);
-        Rect(prompt.rectTransform, new Vector2(0, 0.46f), Vector2.one, new Vector2(10, 0), new Vector2(-10, -6));
+
+        var accent = Box(box.transform, "Accent", new Vector2(0, 1), Vector2.one, new Vector2(18, -4), new Vector2(-18, -1));
+        accent.color = FightColor;
+        accent.raycastTarget = false;
+        prompt = Label(box.transform, 28);
+        Rect(prompt.rectTransform, new Vector2(0, 1), Vector2.one, new Vector2(16, -56), new Vector2(-16, -10));
         prompt.fontStyle = FontStyle.Bold;
-        // Player names are in their colour
         prompt.supportRichText = true;
-        Shadow(prompt);
-        // Readable at arm's length: big, near white, never shrunk below 18
-        subPrompt = Label(box.transform, 24);
+        subPrompt = Label(box.transform, 22);
         subPrompt.resizeTextMinSize = 18;
         subPrompt.supportRichText = true;
-        Rect(subPrompt.rectTransform, Vector2.zero, new Vector2(1, 0.46f), new Vector2(10, 6), new Vector2(-10, 0));
+        Rect(subPrompt.rectTransform, new Vector2(0, 1), Vector2.one, new Vector2(16, -108), new Vector2(-16, -56));
         subPrompt.color = SubColor;
-        Shadow(subPrompt);
+
+        var powerBox = Box(box.transform, "Card Abilities", Vector2.zero, new Vector2(1, 0), new Vector2(16, 10), new Vector2(-16, 102));
+        powerBox.color = Color.clear;
+        powerBox.raycastTarget = false;
+        abilityPanel = powerBox.gameObject;
+        var divider = Box(powerBox.transform, "Divider", new Vector2(0, 1), Vector2.one, new Vector2(0, -1), Vector2.zero);
+        divider.color = new Color(1f, 1f, 1f, 0.16f);
+        divider.raycastTarget = false;
+        abilityTitle = Label(powerBox.transform, 17);
+        abilityTitle.supportRichText = true;
+        abilityTitle.fontStyle = FontStyle.Bold;
+        abilityTitle.color = FightColor;
+        abilityTitle.alignment = TextAnchor.MiddleLeft;
+        Rect(abilityTitle.rectTransform, new Vector2(0, 1), Vector2.one, new Vector2(0, -27), new Vector2(0, -4));
+        abilityDescription = Label(powerBox.transform, 20);
+        abilityDescription.supportRichText = true;
+        abilityDescription.resizeTextMinSize = 16;
+        abilityDescription.alignment = TextAnchor.MiddleLeft;
+        Rect(abilityDescription.rectTransform, Vector2.zero, Vector2.one, Vector2.zero, new Vector2(0, -29));
+
+        // Keep capture feedback in the same panel, above the current instruction.
+        bigText.transform.SetParent(box.transform, false);
+        bigText.fontSize = bigText.resizeTextMaxSize = 28;
+        Rect(bigText.rectTransform, new Vector2(0, 1), Vector2.one, new Vector2(16, -36), new Vector2(-16, -6));
 
         buttons[Left] = MakeButton(hud.transform, "Left Action", new Vector2(0.01f, 0), new Vector2(0.2f, 0), new Vector2(0, 14), new Vector2(0, 74), out buttonTexts[Left], 24);
         buttons[Right] = MakeButton(hud.transform, "Right Action", new Vector2(0.8f, 0), new Vector2(0.99f, 0), new Vector2(0, 14), new Vector2(0, 74), out buttonTexts[Right], 24);
