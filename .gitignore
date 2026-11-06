@@ -40,6 +40,7 @@
 ExportedObj/
 .consulo/
 *.csproj
+*.slnx
 *.unityproj
 *.sln
 *.suo
@@ -68,6 +69,7 @@ sysinfo.txt
 *.unitypackage
 *.app
 /Packages/com.ptc.vuforia.engine-11.4.4.tgz
+/*_BurstDebugInformation_DoNotShip/
 # Crashlytics generated file
 crashlytics-build.properties
 
