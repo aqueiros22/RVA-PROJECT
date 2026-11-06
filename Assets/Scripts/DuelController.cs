@@ -693,7 +693,9 @@ public class DuelController : MonoBehaviour
         prompt.text = text;
         subPrompt.text = sub;
         subPrompt.color = hasNotice ? NoticeColor : SubColor;
-        promptBox.SetActive(text.Length > 0 || sub.Length > 0 || abilityPanel.activeSelf);
+        // Keep the arena clear while it rises and the combat animation plays.
+        promptBox.SetActive(!raisingArena && phase != DuelPhase.Clash &&
+            (text.Length > 0 || sub.Length > 0 || abilityPanel.activeSelf));
     }
 
     // Headline: who records what; sub: who must look away, the cry, the time left
